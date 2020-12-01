@@ -13,7 +13,7 @@ function erp_decode(subjects)
 
     nClasses = 2; % # of possible stimuli we want to differentiate between
     nIter = 1; % # of iterations
-    nBlocks = 10; % # of blocks for cross-validation
+    nBlocks = 3; % # of blocks for cross-validation
     lowPassBorders = [0 6]; % low pass filter
     allTimePoints = -100:2:900; % time points of interest in the analysis
     windowSizeMs = 4; % 1 data point per 4 ms in the preprocessed data
@@ -34,14 +34,14 @@ function erp_decode(subjects)
                     'splinefile', 'icasplinefile', 'dipfit', 'history', ...
                     'saved', 'etc', 'run'};
     %% Loop through participants
-    for subject = subjects
-
+    % for subject = subjects
+        subject = 13
         subjectName = num2str(subject, '%03.f');
         fprintf('Subject:\t%d\n',subject);
 
         % load data subjectName = num2str(subject,'%03.f');
         dataLocation = strcat("/home/jonathan/google_drive/Msc neuroscience/lab", ...
-                              "/data/exported_data"); % set directory of data set
+                              "/data/experiment_data"); % set directory of data set
 
         outputDir = strcat(dataLocation, '/', 'output');
         % conditions = ["cong_int", "inc_int", "cong_scr", "inc_scr"]
@@ -107,14 +107,11 @@ function erp_decode(subjects)
             %     lowPassBorders(1, 2));
             end
         end % Loop through each iteration
-        toc(lowPassStart)
-        % end
-        % lowPassElapsed = toc(lowPassStart)
-        % fprintf('elapsed time: %d', lowPassElapsed)
 
         testLabels = nan(nSamples * nConditions, nBlocks, nIter);
         testPredictions = nan(nSamples * nConditions, nBlocks, nIter);
-        for iter = 1:nIter
+        % for iter = 1:nIter
+        iter = 1
             iterStart = tic; % start timing iteration loop
             for condition = conditions
                 % iter = 1
@@ -178,7 +175,7 @@ function erp_decode(subjects)
                                 squeeze(conditionBlocks (:, :, blockIds == cvBlock));
                     end
 
-            trainLabels = reshape(trainLabels, 1, []);
+            trainLabels = reshape(trainLabels, 1, [])';
 
             testLabels(:, cvBlock, iter) = reshape(iterTestLabels,  1, [])';
 
@@ -188,7 +185,7 @@ function erp_decode(subjects)
 
             fprintf('Training SVM, block: %d\n',cvBlock)
 
-                    model = fitcsvm(trainData', trainLabels');
+                    model = fitcsvm(trainData', trainLabels);
                     % SVM_ECOC model = fitcecoc(trainData,trainLabels,
                     % 'Coding','onevsall','Learners','SVM' ); %train support
                     % vector mahcine
@@ -197,15 +194,15 @@ function erp_decode(subjects)
                     testPredictions(:, cvBlock, iter) = predict(model, testData');
             end % end of block
 
-        end % end of iteration
+        % end % end of iteration
 
 
     toc(iterStart) % stop timing the iteration loop
         percentCorrect =  mean2(reshape(testPredictions, [], 1) == reshape(testLabels, [], 1)) * 100;
         fprintf("percent success, iteration %d: %d%%\n", iter, percentCorrect)
-        allResults(subject) = percentCorrect;
+        % allResults(subject) = percentCorrect;
         % OutputfName = strcat(outputDir,'/Orientation_Results_ERPbased_', subjectName,'.mat');
-        fprintf("percent success overall: %d%%\n" ,mean(allResults))
+        % fprintf("percent success overall: %d%%\n" ,mean(allResults))
         % save(OutputfName,'decoder','-v7.3');
 
     end % subjects
