@@ -5,23 +5,25 @@ function erp_decode(subjects)
     % parpool;
     % eeglab;
 
-    if nargin == 0 subjects = [11]; end
+    if nargin == 0
+        subjects = [11 13 14 15 16]
+    end
 
 % parameters to set
-    subjects = [13 14 15 16];
-    subjects = [13];
 
     nClasses = 2; % # of possible stimuli we want to differentiate between
     nIter = 1; % # of iterations
-    nBlocks = 3; % # of blocks for cross-validation
+    nAveragedTrials = 10; % # of averagedTrials for cross-validation
     lowPassBorders = [0 6]; % low pass filter
     allTimePoints = -100:2:900; % time points of interest in the analysis
     windowSizeMs = 4; % 1 data point per 4 ms in the preprocessed data
     samplingFreq = 512; % samplring rate of the preprocessed data for filtering
     electrodes = 1:64;
-    nElectrodes = length(electrodes) % # of electrode included in the analysis
+    nElectrodes = length(electrodes); % # of electrode included in the analysis
     nSamples = 0;
 
+    nCVBlocks = 3;
+    allSuccessRates = nan(nCVBlocks, numel(subjects));
     conditions = ["cong_int", "cong_scr"];
     nConditions = size(conditions, 2);
     fieldsToDelete = {'filename', 'filepath', 'subject', 'group', ...
@@ -34,18 +36,17 @@ function erp_decode(subjects)
                     'splinefile', 'icasplinefile', 'dipfit', 'history', ...
                     'saved', 'etc', 'run'};
     %% Loop through participants
-    % for subject = subjects
-        subject = 13
+    for subjectIdx = 1:numel(subjects)
+        subject = subjects(subjectIdx);
         subjectName = num2str(subject, '%03.f');
         fprintf('Subject:\t%d\n',subject);
-
-        % load data subjectName = num2str(subject,'%03.f');
         dataLocation = strcat("/home/jonathan/google_drive/Msc neuroscience/lab", ...
                               "/data/experiment_data"); % set directory of data set
 
         outputDir = strcat(dataLocation, '/', 'output');
         % conditions = ["cong_int", "inc_int", "cong_scr", "inc_scr"]
         minTrialnum = intmax;
+
         % assign an integer value to each condition, so we can later put all the data in
         % one matrix and reference it with this number.
         enumVal = 1;
@@ -70,25 +71,26 @@ function erp_decode(subjects)
             if (subjectEEGs.(condition).trials < minTrialnum) minTrialnum = subjectEEGs.(condition).trials;, end
             % set directory for decoding results.
 
-            subjectEEGs.(condition).nTrialsPerBlock = floor(minTrialnum/nBlocks);
+            subjectEEGs.(condition).nTrialsPerAveragedTrial = floor(minTrialnum/nAveragedTrials);
 
-            % the actrual # of trials that can accomodate our desired # of blocks,
-            % such that all blocks contain the same # of trials.
-            subjectEEGs.(condition).nTrials = subjectEEGs.(condition).nTrialsPerBlock * nBlocks;
+            % the actrual # of trials that can accomodate our desired # of averagedTrials,
+            % such that all averagedTrials contain the same # of trials.
+            subjectEEGs.(condition).nTrials = subjectEEGs.(condition).nTrialsPerAveragedTrial * nAveragedTrials;
             nTrials = subjectEEGs.(condition).nTrials;
 
             % create a mapping for shuffling the trials: the value of index[i]
             % gives the index of trial that was shuffled into the i-th
             % position for this iteration
-            subjectEEGs.(condition).blockIndex = repmat((1:nBlocks)',subjectEEGs.(condition).nTrialsPerBlock, 1);
+            subjectEEGs.(condition).averagedTrialIndex = repmat((1:nAveragedTrials)',subjectEEGs.(condition).nTrialsPerAveragedTrial, 1);
         end % conditions
 
         % we assume here that all conditions are normalized to have the same
         % number of time points in each trial recording
         nSamples = subjectEEGs.(conditions(1)).pnts;
 
-        lowPassStart = tic;
+        EEGs = nan(nElectrodes, nTrials, nSamples, nConditions);
         for condition = conditions % low-pass filtering
+            conditionEnum = subjectEEGs.(condition).enumVal;
             subjectEEGs.(condition).filteredData = ...
                                     nan(nElectrodes, ...
                                         nTrials, ...
@@ -99,6 +101,8 @@ function erp_decode(subjects)
             subjectEEGs.(condition).filteredData(electrode,:,:) = ...
                 subjectEEGs.(condition).data(electrode,1:nTrials,:);
 
+            EEGs(electrode, :, :, conditionEnum) = ...
+                subjectEEGs.(condition).data(electrode,1:nTrials,:);
             % subjectEEGs.(condition).filteredData(electrode,:,:) = ...
             % eegfilt(...
             %     squeeze(subjectEEGs.(condition).data(electrode,1:nTrials,:)),...
@@ -108,71 +112,76 @@ function erp_decode(subjects)
             end
         end % Loop through each iteration
 
-        testLabels = nan(nSamples * nConditions, nBlocks, nIter);
-        testPredictions = nan(nSamples * nConditions, nBlocks, nIter);
+        testLabels = nan(nSamples * nConditions, nAveragedTrials, nIter);
+        testPredictions = nan(nSamples * nConditions, nAveragedTrials, nIter);
         % for iter = 1:nIter
         iter = 1
-            iterStart = tic; % start timing iteration loop
             for condition = conditions
                 % iter = 1
 
                 % we're shuffling the indices of the trials - we'll then use
-                % these to  randomly assign a block to each trial.
+                % these to  randomly assign a averagedTrial to each trial.
                 subjectEEGs.(condition).trialIndex = randperm(nTrials)';
-                % unshuffle block assignment - remember that blockIndex is
+                % unshuffle averagedTrial assignment - remember that averagedTrialIndex is
                 % just a cyclyc list of assignments: e.g. 123123123123
-                blocks(subjectEEGs.(condition).trialIndex) = ...
-                                    subjectEEGs.(condition).blockIndex;
+                averagedTrialsAssignment(subjectEEGs.(condition).trialIndex) = ...
+                                    subjectEEGs.(condition).averagedTrialIndex;
 
                 % averaged & filtered eeg data
-                averagedERPBlocks = nan(nElectrodes,nSamples, nBlocks);
+                averagedTrials = nan(nElectrodes,nSamples, nAveragedTrials);
                 filteredData = subjectEEGs.(condition).filteredData;
 
-                for block = 1:nBlocks
-                    % blocks == block means: get me all the trial data that
-                    % has been assigned to block "block". this results in a
-                    % matrix of dimensions nElectrodes x nSamples per each block
-                    averagedERPBlocks(:,:, block) = ...
-                    squeeze(mean(filteredData(:, blocks == block, :), 2));
+                for averagedTrial = 1:nAveragedTrials
+                    % averagedTrials == averagedTrialAssignment means: get me all the trial data that
+                    % has been assigned to averagedTrial "averagedTrial". this results in a
+                    % matrix of dimensions nElectrodes x nSamples per each averagedTrial
+                    averagedTrials(:,:, averagedTrial) = ...
+                    squeeze(mean(filteredData(:, averagedTrialsAssignment == averagedTrial, :), 2));
 
                     % smooth out the ERP signal with a moving average
-                    averagedERPBlocks(:, :, block) = ...
-                    movmean(squeeze(averagedERPBlocks(:, :, block)), 4, ...
+                    averagedTrials(:, :, averagedTrial) = ...
+                    movmean(squeeze(averagedTrials(:, :, averagedTrial)), 4, ...
                     2);
-                end % blocks
+                end % averagedTrials
 
-                subjectEEGs.(condition).averagedERPBlocks = averagedERPBlocks;
+                subjectEEGs.(condition).averagedTrials = averagedTrials;
             end %condition
 
-            blockIds = 1:nBlocks;
-            for cvBlock = 1:nBlocks % cross validation across blocks
-                trainLabels = nan(nSamples * (nBlocks - 1), nConditions);
+                % subjectEEGs.(conditions(1)).averagedTrials(:,:,:) = -1 ;
+                % subjectEEGs.(conditions(2)).averagedTrials(:,:,:) = 1;
+            averagedTrialIds = 1:nAveragedTrials;
+            percentCorrect = nan(1,nCVBlocks);
+            indices = randperm(nAveragedTrials);
+            trainingStart = tic; % start timing iteration loop
+            for cvBlock = indices(1:nCVBlocks) % cross validation across averagedTrials
+                blockStart = tic; % start timing iteration loop
+                trainLabels = nan(nSamples * (nAveragedTrials - 1), nConditions);
                 iterTestLabels = nan(nSamples, nConditions);
-                trainData = nan(nElectrodes, nSamples * (nBlocks - 1), nConditions);
+                trainData = nan(nElectrodes, nSamples * (nAveragedTrials - 1), nConditions);
                 testData = nan(nElectrodes, nSamples, nConditions);
                 % collect data for this division of CV - DON'T PARALLEL!
                 for condition = conditions
                     conditionData = subjectEEGs.(condition);
-                    conditionBlocks = conditionData.averagedERPBlocks;
+                    conditionAveragedTrials = conditionData.averagedTrials;
                     conditionEnum = conditionData.enumVal;
 
-                    fprintf('Collecting data, block: %d, condition: %s\n', ...
-                            cvBlock, condition)
+                    % fprintf('Collecting data, averagedTrial: %d, condition: %s\n', ...
+                    %         cvBlock, condition)
 
                     trainLabels(:, conditionEnum) = repmat(conditionEnum,...
                                         size(trainLabels, 1), 1);
 
-                    % tile the blocks into a 2-D matrix of the data for this condition and
+                    % tile the averagedTrials into a 2-D matrix of the data for this condition and
                     % this CV round
                     trainData(:, :,conditionEnum) = ...
-                        reshape(conditionBlocks(:, :, blockIds ~= cvBlock), ...
+                        reshape(conditionAveragedTrials(:, :, averagedTrialIds ~= cvBlock), ...
                                                                     nElectrodes, []);
 
                     iterTestLabels(: , conditionEnum) = repmat(conditionEnum,...
                                         size(iterTestLabels, 1), 1);
 
                     testData(:, :,conditionEnum) = ...
-                                squeeze(conditionBlocks (:, :, blockIds == cvBlock));
+                                squeeze(conditionAveragedTrials (:, :, averagedTrialIds == cvBlock));
                     end
 
             trainLabels = reshape(trainLabels, 1, [])';
@@ -183,30 +192,33 @@ function erp_decode(subjects)
 
             testData = reshape(testData, size(testData, 1), []);
 
-            fprintf('Training SVM, block: %d\n',cvBlock)
-
-                    model = fitcsvm(trainData', trainLabels);
-                    % SVM_ECOC model = fitcecoc(trainData,trainLabels,
-                    % 'Coding','onevsall','Learners','SVM' ); %train support
-                    % vector mahcine
-
-                    %store test results for this <block,iter>
-                    testPredictions(:, cvBlock, iter) = predict(model, testData');
-            end % end of block
+            fprintf('Training SVM, holding out averagedTrial %d for testing\n',cvBlock)
+            SVMModel = fitcsvm(trainData', trainLabels, 'ShrinkagePeriod', 1000);
+            % SVM_ECOC model = fitcecoc(trainData,trainLabels,
+            % 'Coding','onevsall','Learners','SVM' ); %train support
+            % vector mahcine
+            classLoss = kfoldLoss(crossval(SVMModel))
+            %store test results for this <averagedTrial,iter>
+            testPredictions(:, cvBlock, iter) = predict(SVMModel, testData');
+            percentCorrect(1, cvBlock) =  mean(squeeze(testPredictions(:, cvBlock, iter) == testLabels(:, cvBlock, iter))) * 100;
+            fprintf("success rate, block %d: %.1f%%\n", cvBlock, percentCorrect(cvBlock))
+            elapsed = toc(blockStart);
+            elapsed = datevec(elapsed./(60*60*24));
+            fprintf("time elapsed for this CV block: %d minutes, %.0f seconds\n", elapsed(end-1), elapsed(end))
+            end % end of cross validation
 
         % end % end of iteration
 
-
-    toc(iterStart) % stop timing the iteration loop
-        percentCorrect =  mean2(reshape(testPredictions, [], 1) == reshape(testLabels, [], 1)) * 100;
-        fprintf("percent success, iteration %d: %d%%\n", iter, percentCorrect)
+        totalElapsed = toc(trainingStart); % stop timing the iteration loop
+        totalElapsed = datevec(totalElapsed./(60*60*24));
+        percentCorrect
+        allSuccessRates(:, subjectIdx) =  percentCorrect;
+        averagedPercentCorrect(subjectIdx) =  mean(percentCorrect);
+        fprintf("overall success rate, iteration %d: %.1f%%\n", iter, averagedPercentCorrect(subjectIdx))
+        fprintf("total time elapsed: %d minutes, %.0f seconds\n", totalElapsed(end-1), totalElapsed(end))
         % allResults(subject) = percentCorrect;
         % OutputfName = strcat(outputDir,'/Orientation_Results_ERPbased_', subjectName,'.mat');
         % fprintf("percent success overall: %d%%\n" ,mean(allResults))
         % save(OutputfName,'decoder','-v7.3');
-
     end % subjects
-
-
 end
-
