@@ -11,8 +11,8 @@
 % Gi-Yeul Bae 2017.10.3.
 
 function SVM_ECOC_ERP_Decoding(subs)
-delete(gcp)
-parpool
+% delete(gcp)
+% parpool
 addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
 if nargin ==0
 
@@ -246,7 +246,7 @@ for s = 1:nSubs
     
     svmECOC.targets = tst_target;
     svmECOC.modelPredict = svm_predict; 
-    svmECOC.testRresults =  svmECOC.targets == svmECOC.modelPredict;
+    svmECOC.testResults =  svmECOC.targets == svmECOC.modelPredict;
     svmECOC.successRate =  mean(svmECOC.testResults, "all") * 100;
     svmECOC.nBlocks = nBlocks;
 
