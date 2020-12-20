@@ -11,16 +11,15 @@
 % Gi-Yeul Bae 2017.10.3.
 
 function SVM_ECOC_ERP_Decoding(subs)
-% delete(gcp)
-% parpool
-
+delete(gcp)
+parpool
+addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
 if nargin ==0
 
     subs = [505 506 507 508 509 510 512 514 516 517 519 520 521 523 524 525];       
 end
 
 nSubs = length(subs);
-
 % parameters to set
 
 svmECOC.nChans = 16; % # of channels
@@ -76,17 +75,18 @@ for s = 1:nSubs
 
     % load data
     currentSub = num2str(sn);
-    dataLocation = strcat("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\data\data_luck_2018\Exp1_Data"); % set directory of data set
+    dataLocation = strcat("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\Exp1_Data");% set directory of data set
     loadThis = strcat(dataLocation,'\Decoding_DE_',currentSub,'.mat');
-    load(loadThis)
-    data.eeg = data.eeg(data.channel == 1 | data.channel == 10);
+    load(loadThis);
+    % data.eeg = data.eeg(data.channel == 1 | data.channel == 10);
     % where to save decoding output
     saveLocation = pwd; % set directory for decoding results.
 
     
     % set up locaiton bin of each trial
 
-    channel = data.channel(data.channel == 1 | data.channel == 10); % tip location of sample teardrop
+    channel = data.channel;
+    %channel = data.channel(data.channel == 1 | data.channel == 10); % tip location of sample teardrop
 
     svmECOC.posBin = channel'; % add to fm structure so it's saved
 
@@ -112,14 +112,14 @@ for s = 1:nSubs
     filtData = nan(nTrials,nElectrodes,nTimes);
 
 
-    for c = 1:nElectrodes
-          filtData(:,c,:) = squeeze(eegs(:,c,:)); % low pass filter
-    end
+ %   for c = 1:nElectrodes
+%          filtData(:,c,:) = squeeze(eegs(:,c,:)); % low pass filter
+  %  end
 
     size(filtData)
-    % for c = 1:nElectrodes
-    %       filtData(:,c,:) = eegfilt(squeeze(eegs(:,c,:)),Fs,freqs(1,1),freqs(1,2)); % low pass filter
-    % end
+    parfor c = 1:nElectrodes
+       filtData(:,c,:) = eegfilt(squeeze(eegs(:,c,:)),Fs,freqs(1,1),freqs(1,2)); % low pass filter
+    end
 
     % Loop through each iteration
     tic % start timing iteration loop
@@ -204,7 +204,7 @@ for s = 1:nSubs
         end
 
         % Do SVM_ECOC at each time point
-        for t = 1:nSamps
+        parfor t = 1:nSamps
 
             % grab data for timepoint t
 
@@ -226,12 +226,11 @@ for s = 1:nSubs
                 tstD = dataAtTimeT(blockNum==i,:);    % test data
 
                 % SVM_ECOC
-                fprintf("training SVM...")
                 mdl = fitcecoc(trnD,trnl, 'Coding','onevsall','Learners','SVM');   %train support vector mahcine
                 LabelPredicted = predict(mdl, tstD);       % predict classes for new data
                 
                 svm_predict(iter,t,i,:) = LabelPredicted;  % save predicted labels
-                
+               
                 tst_target(iter,t,i,:) = tstl;             % save true target labels
 
             end % end of block
@@ -247,7 +246,8 @@ for s = 1:nSubs
     
     svmECOC.targets = tst_target;
     svmECOC.modelPredict = svm_predict; 
-
+    svmECOC.testRresults =  svmECOC.targets == svmECOC.modelPredict;
+    svmECOC.successRate =  mean(svmECOC.testResults, "all") * 100;
     svmECOC.nBlocks = nBlocks;
 
     save(OutputfName,'svmECOC','-v7.3');
@@ -255,5 +255,15 @@ for s = 1:nSubs
 end % end of subject loop
 end % end of condition loop
 
+
+for s = 1:numel(subs)
+sub = subs(s);
+varName = strcat('sub_',num2str(sub))
+resultsFile = strcat(saveLocation,'\Orientation_Results_ERPbased_',num2str(sub),'.mat');
+tmp =  load(resultsFile);
+results.(varName) = tmp.svmECOC;
+results.(varName).successRatesTime = mean(results.(varName).testResults, [1 3 4])
+allResults(s) = results.(varName).successRate;
 end
 
+end
