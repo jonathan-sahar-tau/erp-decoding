@@ -10,7 +10,7 @@
 
 % Gi-Yeul Bae 2017.10.3.
 
-function SVM_ECOC_ERP_Decoding(subs)
+function svmECOC_our_data(subs)
 % delete(gcp)
 % parpool
 
@@ -23,7 +23,9 @@ nSubs = length(subs);
 
 % parameters to set
 
-svmECOC.nChans = 16; % # of channels
+svmECOC.conditions = ["cong_int", "cong_scr", "inc_int"];
+
+svmECOC.nChans = numel(svmECOC.conditions); % # of channels
 
 svmECOC.nBins = svmECOC.nChans; % # of stimulus bins
 
@@ -33,15 +35,14 @@ svmECOC.nBlocks = 3; % # of blocks for cross-validation
 
 svmECOC.frequencies = [0 6]; % low pass filter
 
-svmECOC.time = -500:20:1496; % time points of interest in the analysis
+svmECOC.time = -200:20:800; % time points of interest in the analysis
 
 svmECOC.window = 4; % 1 data point per 4 ms in the preprocessed data
 
-svmECOC.Fs = 250; % samplring rate of in the preprocessed data for filtering
+svmECOC.Fs = 512 ; % samplring rate of the preprocessed data for filtering
 
-ReleventChan = sort([2,3,4,18,19, 5,6,20, 7,8,21, 9,10,11,12,13,14, 22,23,24,25,26,27, 15,16,1,17]); %electrodes
 
-svmECOC.nElectrodes = length(ReleventChan); % # of electrode included in the analysis
+svmECOC.nElectrodes = 64; % # of electrode included in the analysis
 
 % for brevity in analysis
 
@@ -90,7 +91,6 @@ fileId = fopen(outputFile, 'w');
 nCVBlocks = 3;
 averagedSuccessRates = nan(numel(subjects), 1);
 allSuccessRates = nan(nCVBlocks, numel(subjects));
-conditions = ["cong_int", "cong_scr", "inc_int"];
 %% Loop through participants
     for subjectIdx = 1:numel(subjects)
         subject = subjects(subjectIdx);
@@ -131,11 +131,15 @@ conditions = ["cong_int", "cong_scr", "inc_int"];
         % normalize all conditions to have the same number of time points in each trial recording
         nSamples = EEG.(conditions(1)).pnts;
 
-        % create a mapping for shuffling the trials: the value of index[i]
-        % gives the index of trial that was shuffled into the i-th
-        % position for this iteration
+        allData = nan(nTrials * nChans, nElectrodes,nSamples)
         for condition = conditions
+            % create a mapping for shuffling the trials: the value of index[i]
+            % gives the index of trial that was shuffled into the i-th
+            % position for this iteration
             EEG.(condition).averagedTrialIndex = repmat((1:nAveragedTrials)',nTrialsPerAveragedTrial, 1);
+            enumVal =  EEG.(condition).enumVal;
+            trialDataRange = (1 + (enumVal-1) *  nTrials : nTrials * enumVal);
+            allData(trialDataRange, :, :) = EEG.(condition).data
         end
 
     data.eeg = data.eeg(data.channel == 1 | data.channel == 10);
