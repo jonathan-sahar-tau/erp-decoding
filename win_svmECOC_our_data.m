@@ -13,7 +13,6 @@
 function svmECOC_our_data()
 % delete(gcp)
 % parpool
-addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
 
 if nargin == 0
     subjects = [11 13 14 15 16 17 19 20 21];
@@ -75,10 +74,11 @@ fieldsToDelete = {'filename', 'filepath', 'subject', 'group', ...
                 'reject', 'stats', 'specdata', 'specicaact', ...
                 'splinefile', 'icasplinefile', 'dipfit', 'history', ...
                 'saved', 'etc', 'run'};
+% baseDir("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\")
+baseDir = "C:\Users\Jonathan\Google Drive\Msc neuroscience\lab\analysis_scripts\erp-decoding\";
+eeglabPath = strcat(baseDir, "software\eeglab2020_0")
 
-addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
 
-baseDir = "G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\";
 dataLocation = strcat(baseDir, "exported data\");
 exportDataLocation = strcat(baseDir, "experiment_data\");
 outputDir = strcat(baseDir, "output\");
