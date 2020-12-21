@@ -110,12 +110,6 @@ for s = 1:nSubs
 
     % low-pass filtering
     filtData = nan(nTrials,nElectrodes,nTimes);
-
-
- %   for c = 1:nElectrodes
-%          filtData(:,c,:) = squeeze(eegs(:,c,:)); % low pass filter
-  %  end
-
     size(filtData)
     parfor c = 1:nElectrodes
        filtData(:,c,:) = eegfilt(squeeze(eegs(:,c,:)),Fs,freqs(1,1),freqs(1,2)); % low pass filter

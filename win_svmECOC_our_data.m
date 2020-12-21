@@ -36,7 +36,7 @@ svmECOC.nBlocks = 5; % # of blocks for cross-validation
 
 svmECOC.frequencies = [0 30]; % low pass filter
 
-svmECOC.time = -99:2:898; % time points of interest in the analysis
+svmECOC.time = -99:10:898; % time points of interest in the analysis
 
 svmECOC.window = 4; % 1 data point per 4 ms in the preprocessed data
 
@@ -144,8 +144,9 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
 
         data.eeg = allData;
-        data.time.pre = -99;
-        data.time.post = 898;
+        data.times = floor(EEG.(conditions(1)).times);
+        data.time.pre = data.times(1);
+        data.time.post = data.times(end);
 
         % set up locaiton bin of each trial
 
@@ -159,7 +160,9 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         eegs = data.eeg;
 
         % set up time points
-        tois = ismember(data.time.pre:2:data.time.post,svmECOC.time);
+        t = 1:numel(data.times);
+        tois = (mod(t,20) == 0); % mod 20 for downsampling to 50 Hz in analysis (1000/20 = 50)
+%         tois = ismember(data.time.pre:2:data.time.post,svmECOC.time);
         nTimes = length(tois);
 
         % # of trials
@@ -173,18 +176,10 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
         % low-pass filtering
         filtData = nan(nTrials,nElectrodes,nTimes);
-
-    % 
-    %     for c = 1:nElectrodes
-    %           filtData(:,c,:) = squeeze(eegs(:,c,:)); % low pass filter
-    %     end
-
-        size(filtData)
-
         tic
         parfor c = 1:nElectrodes
-              tmp = eegfilt(squeeze(eegs(:,c,:)),Fs,freqs(1,1),freqs(1,2));
-              filtData(:,c,:) = tmp(:,1:nTimes); % low pass filter
+              tmp = eegfilt(squeeze(eegs(:,c,:)),Fs,freqs(1,1),freqs(1,2)); % low pass filter
+              filtData(:,c,:) = tmp(:,1:nTimes); 
         end
         toc
     
