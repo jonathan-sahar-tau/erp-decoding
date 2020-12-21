@@ -11,8 +11,8 @@
 % Gi-Yeul Bae 2017.10.3.
 
 function svmECOC_our_data()
-delete(gcp)
-parpool
+% delete(gcp)
+% parpool
 addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
 
 if nargin == 0
@@ -36,7 +36,6 @@ svmECOC.nBlocks = 5; % # of blocks for cross-validation
 
 svmECOC.frequencies = [0 30]; % low pass filter
 
-svmECOC.time = -99:10:898; % time points of interest in the analysis
 
 svmECOC.window = 4; % 1 data point per 4 ms in the preprocessed data
 
@@ -57,12 +56,9 @@ nBlocks = svmECOC.nBlocks;
 nAveragedTrials = nBlocks;
 
 freqs = svmECOC.frequencies;
-
-times = svmECOC.time;
  
 nElectrodes = svmECOC.nElectrodes;
 
-nSamps = length(svmECOC.time);
 
 Fs = svmECOC.Fs;
 
@@ -94,6 +90,7 @@ averagedSuccessRates = nan(numel(subjects), 1);
 allSuccessRates = nan(nCVBlocks, numel(subjects));
 %% Loop through participants
     for subjectIdx = 1:numel(subjects)
+        subjectTic = tic;
         subject = subjects(subjectIdx);
         subjectName = num2str(subject, '%03.f');
         fprintf('Subject:\t%d\n',subject);
@@ -145,9 +142,16 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
         data.eeg = allData;
         data.times = floor(EEG.(conditions(1)).times);
+        
         data.time.pre = data.times(1);
         data.time.post = data.times(end);
+        
+        resamplingRatio = round((data.time.post - data.time.pre)/100);
+        svmECOC.time = data.time.pre:resamplingRatio:data.time.post; % time points of interest in the analysis
+        times = svmECOC.time;
+        nSamps = length(svmECOC.time);
 
+        
         % set up locaiton bin of each trial
 
         channel = allLabels;
@@ -160,9 +164,9 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         eegs = data.eeg;
 
         % set up time points
-        t = 1:numel(data.times);
-        tois = (mod(t,20) == 0); % mod 20 for downsampling to 50 Hz in analysis (1000/20 = 50)
-%         tois = ismember(data.time.pre:2:data.time.post,svmECOC.time);
+%         t = 1:numel(data.times);
+%         tois = (mod(t,20) == 0); % mod 20 for downsampling to 50 Hz in analysis (1000/20 = 50)
+        tois = ismember(data.time.pre:2:data.time.post,svmECOC.time);
         nTimes = length(tois);
 
         % # of trials
@@ -185,11 +189,11 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
     
         % Loop through each iteration
         tic % start timing iteration loop
-
+    
         for iter = 1:nIter
-
+            printf("training iteration %d", iter);
+            
             % preallocate arrays
-
             blocks = nan(size(posBin));
 
             shuffBlocks = nan(size(posBin));
@@ -277,7 +281,6 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
                 dataAtTimeT = squeeze(mean(blockDat_filtData(:,:,toi),3));  
 
                 % Do SVM_ECOC for each block
-                fprintf("training...\n");
                 for i=1:nBlocks % loop through blocks, holding each out as the test set
 
                     trnl = labels(blockNum~=i); % training labels
@@ -314,10 +317,11 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
     svmECOC.overallSuccessRatePcnt =  mean(svmECOC.testResults, "all") * 100;
     svmECOC.successRatesTime = mean(svmECOC.testResults, [1 3 4]);
     tmp = sort(svmECOC.successRatesTime, 'descend');
-    svmECOC.topSuccessRates = tmp(1:10) 
+    svmECOC.topSuccessRates = tmp(1:10);
 %     allSubjectSuccessRatesTime{subjectName} = svmECOC.successRatesTime;
 
     save(OutputfName,'svmECOC','-v7.3');
+    toc(subjectTic)
     end % end of subject loop
    
     OutputfName = strcat(outputDir, 'congruency_and_intactness_results_all.mat');
