@@ -102,15 +102,12 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         for condition = conditions
             exportFileName = strcat(subjectName, '_', condition, '_bc', '.mat');
             exportLocation = strcat(exportDataLocation, '\', exportFileName);
-%           currentFilename= strcat(subjectName, '_', condition, '_bc', '.vhdr');
-%           tempData = (pop_loadbv(dataLocation, currentFilename, [], 1:64));
-%           save(exportLocation, 'tempData', '-v7.3')
- 
-            % remove uneeded fields from the struct
+
+            % remove unneeded fields from the struct
             load(exportLocation); %into variable tempData
             tempData = rmfield(tempData, fieldsToDelete);
 
-            % swap the 1st and 2nd dimensions, effectively transposing the
+            % swap the the matrix dimensions, effectively transposing the
             % "inner" (electrode) matrices to be nTrials x nSamples -
             % every row is the time course of one trial
             tempData.data = permute(tempData.data, [3, 1, 2]);
@@ -161,8 +158,6 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         eegs = data.eeg;
 
         % set up time points
-%         t = 1:numel(data.times);
-%         tois = (mod(t,20) == 0); % mod 20 for downsampling to 50 Hz in analysis (1000/20 = 50)
         tois = ismember(data.time.pre:2:data.time.post,svmECOC.time);
         nTimes = length(tois);
 

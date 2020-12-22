@@ -164,8 +164,7 @@ for otherCond = ["cong_scr", "inc_int"];
 
                     % smooth out the ERP signal with a moving average
                     averagedTrials(:, :, averagedTrial) = ...
-                    movmean(squeeze(averagedTrials(:, :, averagedTrial)), 4, ...
-                    2);
+                    movmean(squeeze(averagedTrials(:, :, averagedTrial)), 4, 2);
                 end % averagedTrials
 
                 subjectEEGs.(condition).averagedTrials = averagedTrials;

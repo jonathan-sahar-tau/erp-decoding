@@ -1,6 +1,5 @@
 function preprocess_data(subjects)
    
-    addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
 
     if nargin == 0
         subjects = [11 13 14 15 16 17 19 20 21];
@@ -12,9 +11,13 @@ function preprocess_data(subjects)
     % parameters to set
     conditions = ["cong_int", "cong_scr", "inc_int"];
     numElectrodes = 64;
-    addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
-    dataLocation = "G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\exported data";
-    exportDataLocation = "G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\experiment_data";
+    % baseDir("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\")
+    baseDir = "C:\Users\Jonathan\Google Drive\Msc neuroscience\lab\";
+    eeglabPath = strcat(baseDir, "software\eeglab2020_0")
+    addpath(eeglabPath);
+
+    dataLocation = strcat(baseDir, "data\experiment_data\");
+    exportDataLocation = strcat(baseDir, "analysis_scripts\erp-decoding\experiment_data\");
 
 %% Loop through participants
     for subjectIdx = 1:numel(subjects)
