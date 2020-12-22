@@ -10,16 +10,15 @@
 
 % Gi-Yeul Bae 2017.10.3.
 
-function SVM_ECOC_ERP_Decoding(subs)
+function SVM_ECOC_ERP_Decoding(subjects)
 % delete(gcp)
 % parpool
 addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
 if nargin ==0
-
-    subs = [505 506 507 508 509 510 512 514 516 517 519 520 521 523 524 525];       
+    subjects = [505 506 507 508 509 510]; % 512 514 516 517 519 520 521 523 524 525];       
 end
 
-nSubs = length(subs);
+nSubs = length(subjects);
 % parameters to set
 
 svmECOC.nChans = 16; % # of channels
@@ -62,27 +61,29 @@ nSamps = length(svmECOC.time);
 
 Fs = svmECOC.Fs;
 
-t = templateSVM('Verbose', 1)
+t = templateSVM('Verbose', 1);
 %% Loop through participants
 for cond = 1:1
     % 1: orientation
     
 %% Loop through participants
 for s = 1:nSubs
-    sn = subs(s);
+    sn = subjects(s);
 
     fprintf('Subject:\t%d\n',sn)
 
     % load data
-    currentSub = num2str(sn);
-    dataLocation = strcat("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\Exp1_Data");% set directory of data set
-    loadThis = strcat(dataLocation,'\Decoding_DE_',currentSub,'.mat');
+    subjectName = num2str(sn);
+    addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
+
+    baseDir = "G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\";
+    dataLocation = strcat(baseDir, "Exp1_Data\");
+    outputDir = strcat(baseDir, "output\");
+    loadThis = strcat(dataLocation,'\Decoding_DE_',subjectName,'.mat');
     load(loadThis);
     % data.eeg = data.eeg(data.channel == 1 | data.channel == 10);
     % where to save decoding output
-    saveLocation = pwd; % set directory for decoding results.
 
-    
     % set up locaiton bin of each trial
 
     channel = data.channel;
@@ -110,7 +111,6 @@ for s = 1:nSubs
 
     % low-pass filtering
     filtData = nan(nTrials,nElectrodes,nTimes);
-    size(filtData)
     parfor c = 1:nElectrodes
        filtData(:,c,:) = eegfilt(squeeze(eegs(:,c,:)),Fs,freqs(1,1),freqs(1,2)); % low pass filter
     end
@@ -235,29 +235,60 @@ for s = 1:nSubs
 
     toc % stop timing the iteration loop
 
-
-    OutputfName = strcat(saveLocation,'\Orientation_Results_ERPbased_',currentSub,'.mat');
+OutputfName = strcat(outputDir, ...
+                         subjectName, ...
+                         '_svmECOC', ...
+                         '_results', ...
+                         '.mat');
     
+    svmECOC.nBlocks = nBlocks;
     svmECOC.targets = tst_target;
     svmECOC.modelPredict = svm_predict; 
     svmECOC.testResults =  svmECOC.targets == svmECOC.modelPredict;
-    svmECOC.successRate =  mean(svmECOC.testResults, "all") * 100;
-    svmECOC.nBlocks = nBlocks;
+    svmECOC.overallSuccessRatePcnt =  mean(svmECOC.testResults, "all") * 100;
+    svmECOC.successRatesTime = mean(svmECOC.testResults, [1 3 4]);
+    tmp = sort(svmECOC.successRatesTime, 'descend');
+    svmECOC.topSuccessRates = tmp(1:10);
 
     save(OutputfName,'svmECOC','-v7.3');
+    end % end of subject loop
+  
+    
 
-end % end of subject loop
-end % end of condition loop
+% subjects = [505 506 507 508 509 510 512 514 516 517 519 520 521 523 524 525];       
+% baseDir = "G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\";
+% dataLocation = strcat(baseDir, "exported data\");
+% exportDataLocation = strcat(baseDir, "experiment_data\");
+% outputDir = strcat(baseDir, "output\");
 
-
-for s = 1:numel(subs)
-sub = subs(s);
-varName = strcat('sub_',num2str(sub))
-resultsFile = strcat(saveLocation,'\Orientation_Results_ERPbased_',num2str(sub),'.mat');
-tmp =  load(resultsFile);
-results.(varName) = tmp.svmECOC;
-results.(varName).successRatesTime = mean(results.(varName).testResults, [1 3 4])
-allResults(s) = results.(varName).successRate;
+for s = 1:numel(subjects)
+    sub = subjects(s);
+    subjectName = num2str(sub, '%03.f')
+    resultsFile = strcat(outputDir, ...
+                         subjectName, ...
+                         '_svmECOC', ...
+                         '_results', ...
+                         '.mat');
+    tmp =  load(resultsFile);
+    svmECOC = tmp.svmECOC;
+    results{s} = svmECOC.successRatesTime;
+    max(svmECOC.successRatesTime)
 end
+
+allResults = cat(1, results{:});
+times = tmp.svmECOC.time;
+
+%plot results
+figure
+numCols = round(numel(subjects)/2);
+for s = 1:numel(subjects)
+    subplot(2, numCols, s);
+    plot(times, allResults(s, :) * 100);
+    xlabel('Time')
+    ylabel('success rate %')
+    titleString = sprintf('Sucess rate, subject %d', subjects(s));
+    title(titleString)
+end
+
 
 end
