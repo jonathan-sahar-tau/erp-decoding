@@ -13,7 +13,6 @@
 function SVM_ECOC_ERP_Decoding(subjects)
 % delete(gcp)
 % parpool
-addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
 if nargin ==0
     subjects = [505 506 507 508 509 510]; % 512 514 516 517 519 520 521 523 524 525];       
 end
@@ -62,10 +61,11 @@ nSamps = length(svmECOC.time);
 Fs = svmECOC.Fs;
 
 t = templateSVM('Verbose', 1);
-%% Loop through participants
-for cond = 1:1
-    % 1: orientation
-    
+addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
+
+baseDir = "G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\";
+dataLocation = strcat(baseDir, "Exp1_Data\");
+outputDir = strcat(baseDir, "output\");
 %% Loop through participants
 for s = 1:nSubs
     sn = subjects(s);
@@ -74,11 +74,6 @@ for s = 1:nSubs
 
     % load data
     subjectName = num2str(sn);
-    addpath("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\software\eeglab2020_0")
-
-    baseDir = "G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\";
-    dataLocation = strcat(baseDir, "Exp1_Data\");
-    outputDir = strcat(baseDir, "output\");
     loadThis = strcat(dataLocation,'\Decoding_DE_',subjectName,'.mat');
     load(loadThis);
     % data.eeg = data.eeg(data.channel == 1 | data.channel == 10);
@@ -284,6 +279,10 @@ numCols = round(numel(subjects)/2);
 for s = 1:numel(subjects)
     subplot(2, numCols, s);
     plot(times, allResults(s, :) * 100);
+    hold on
+    plot(times, repmat(1/numel(conditions) * 100, numel(times)), 'b.' );
+    plot(times, repmat(1/numel(conditions) * 100 * 1.5, numel(times)), 'g.' );
+    hold off
     xlabel('Time')
     ylabel('success rate %')
     titleString = sprintf('Sucess rate, subject %d', subjects(s));

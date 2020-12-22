@@ -10,7 +10,7 @@
 
 % Gi-Yeul Bae 2017.10.3.
 
-function svmECOC_our_data()
+function svmECOC_our_data(subjects)
 % delete(gcp)
 % parpool
 
@@ -19,7 +19,7 @@ if nargin == 0
 end
 % subjects = [11 13] %14 15 16];
 nSubs = length(subjects);
-
+subjects
 % parameters to set
 
 svmECOC.conditions = ["cong_int", "cong_scr"]; %, "inc_int"];
@@ -28,7 +28,7 @@ svmECOC.nChans = numel(svmECOC.conditions); % # of channels
 
 svmECOC.nBins = svmECOC.nChans; % # of stimulus bins
 
-svmECOC.nIter = 10; % # of iterations
+svmECOC.nIter = 1; % # of iterations
 
 svmECOC.nBlocks = 3; % # of blocks for cross-validation
 
@@ -61,8 +61,7 @@ nElectrodes = svmECOC.nElectrodes;
 Fs = svmECOC.Fs;
 
 conditions = svmECOC.conditions;
-
-t = templateSVM('Verbose', 1);
+svmTemplate = templateSVM('KernelFunction','linear');
 
 fieldsToDelete = {'filename', 'filepath', 'subject', 'group', ...
                 'condition', 'setname', 'session', 'srate', ...
@@ -75,14 +74,12 @@ fieldsToDelete = {'filename', 'filepath', 'subject', 'group', ...
                 'saved', 'etc', 'run'};
 % baseDir("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\")
 baseDir = "C:\Users\Jonathan\Google Drive\Msc neuroscience\lab\analysis_scripts\erp-decoding\";
-eeglabPath = strcat(baseDir, "software\eeglab2020_0")
+eeglabPath = strcat(baseDir, "software\eeglab2020_0");
 
 
 dataLocation = strcat(baseDir, "exported data\");
 exportDataLocation = strcat(baseDir, "experiment_data\");
 outputDir = strcat(baseDir, "output\");
-
-outputFile = strcat(outputDir, datestr(now,'mm-dd-yyyy-HH-MM'), '_run-log')
 
 nCVBlocks = 3;
 averagedSuccessRates = nan(numel(subjects), 1);
@@ -139,7 +136,6 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         data.time.pre = data.times(1);
         data.time.post = data.times(end);
         
-%         resamplingRatio = round((data.time.post - data.time.pre)/100); % resample the data during analysis to have 100 datapoints - comes out to be 100Hz in this case
         resamplingRatio = 1000/100; % % resample the data during analysis to 100 Hz
         svmECOC.time = data.time.pre:resamplingRatio:data.time.post; % time points of interest in the analysis
         times = svmECOC.time;
@@ -156,8 +152,6 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         % grab EEG data
         eegs = data.eeg;
 
-        % set up time points
-        tois = ismember(data.time.pre:2:data.time.post,svmECOC.time);
         nTimes = size(eegs, 3);
 
         % # of trials
@@ -177,12 +171,12 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
               filtData(:,c,:) = tmp(:,1:nTimes);
         end
         toc
-    
+
         % Loop through each iteration
-        tic % start timing iteration loop
-    
+        timings = nan(1:nIter);
         for iter = 1:nIter
             fprintf("training iteration %d\n", iter);
+            iterTic = tic; % start timing iteration loop
             
             % preallocate arrays
             blocks = nan(size(posBin));
@@ -259,16 +253,13 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
             end
 
-            blockDat_filtData = movmean(blockDat_filtData, 4, 3); % sliding window of 4 samples across time dimension
-            resamplingRatio = floor(nTimes/nSamps)
+            blockDat_filtData = movmean(blockDat_filtData, svmECOC.window, 3); % sliding window of 4 samples across time dimension
+            resamplingRatio = floor(nTimes/nSamps);
             blockDat_filtData = blockDat_filtData(:,:,1:resamplingRatio:end); % resample down to 100Hz
             % Do SVM_ECOC at each time point
             for t = 1:nSamps
 
                 % grab data for timepoint t
-
-                toi = ismember(times,times(t)-svmECOC.window/2:times(t)+svmECOC.window/2);
-
                 % average across time window of interest
 
                 dataAtTimeT = blockDat_filtData(:,:,t);  
@@ -288,7 +279,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
                     mdl = fitcecoc(trnD,trnl, ... 
                                    'Coding','ternarycomplete', ...
                                    ... 'Coding','onevsall', ...
-                                   'Learners','svm');   %train support vector mahcine
+                                   'Learners', svmTemplate);   %train support vector mahcine
                     LabelPredicted = predict(mdl, tstD);       % predict classes for new data
 
                     svm_predict(iter,t,i,:) = LabelPredicted;  % save predicted labels
@@ -299,9 +290,9 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
             end % end of time points
 
+        timings(iter) = toc(iterTic); % stop timing the iteration loop
         end % end of iteration
-
-        toc % stop timing the iteration loop
+        
 
 
     OutputfName = strcat(outputDir, ...
@@ -321,46 +312,47 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
     save(OutputfName,'svmECOC','-v7.3');
     toc(subjectTic)
+    fprintf('average iteration time: %03.f seconds\n', mean(timings));
+
     end % end of subject loop
    
 %     OutputfName = strcat(outputDir, 'congruency_and_intactness_results_all.mat');
 %     save(OutputfName,'allSubjectSuccessRatesTime','-v7.3');
 
+
+    for i = 1:numel(subjects)
+        sub = subjects(i);
+        subjectName = num2str(sub, '%03.f')
+
+        resultsFile = strcat(outputDir, ...
+                        ... 'prev_runs\', ...
+                            subjectName, '_', ...
+                            strjoin(conditions, '_'), ...
+                            '_results',  ...
+                        ... '_sliding_window', ...
+                            '.mat');
+        tmp =  load(resultsFile);
+        svmECOC = tmp.svmECOC;
+        results{i} = svmECOC.successRatesTime;
+        fprintf('subject %s, max success rate: %03.f, mean success rate: %03.f\n', subjectName,  max(svmECOC.successRatesTime), mean(svmECOC.successRatesTime));
+    end
+    allResults = cat(1, results{:});
+    times = tmp.svmECOC.time;
     
-% subjects = [11 13 14 16 17 19 20 21];    
-% svmECOC.conditions = ["cong_int", "cong_scr"]; %, "inc_int"];
-% 
-% baseDir = "G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\";
-% dataLocation = strcat(baseDir, "exported data\");
-% exportDataLocation = strcat(baseDir, "experiment_data\");
-% outputDir = strcat(baseDir, "output\");
-
-for s = 1:numel(subjects)
-    sub = subjects(s);
-    subjectName = num2str(sub, '%03.f')
-    resultsFile = strcat(outputDir, ...
-                         subjectName, '_', ... 
-                         strjoin(conditions, '_'), ...
-                         '_results', ...
-                         '.mat');
-    tmp =  load(resultsFile);
-    svmECOC = tmp.svmECOC;
-    results{s} = svmECOC.successRatesTime;
-    max(svmECOC.successRatesTime)
-end
-allResults = cat(1, results{:});
-times = tmp.svmECOC.time;
-
-figure
-numCols = round(numel(subjects)/2);
-for s = 1:numel(subjects)
-    subplot(2, numCols, s);
-    plot(times, allResults(s, :) * 100);
-    xlabel('Time')
-    ylabel('success rate %')
-    titleString = sprintf('Sucess rate, subject %d', subjects(s));
-    title(titleString)
-end
+    numPlotsPerFigure = 6;
+    plotIdx = repmat(1:numPlotsPerFigure, 1, floor(numel(subjects)/numPlotsPerFigure + 1));
+    for i = 1:numel(subjects)
+        if  mod(i, numPlotsPerFigure) == 1
+            figure('units','normalized')
+        end
+        subplot(2, numPlotsPerFigure/2, plotIdx(i));
+        plot(times, allResults(i, :)*100);
+        ylim([0 120])
+        xlabel('Time')
+        ylabel('success rate %')
+        titleString = sprintf('Sucess rate, subject %d', subjects(i));
+        title(titleString)
+    end
 
 
 end
