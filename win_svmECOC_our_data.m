@@ -285,7 +285,10 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
                     tstD = dataAtTimeT(blockNum==i,:);    % test data
 
                     % SVM_ECOC
-                    mdl = fitcecoc(trnD,trnl, 'Coding','onevsall','Learners','SVM');   %train support vector mahcine
+                    mdl = fitcecoc(trnD,trnl, ... 
+                                   'Coding','ternarycomplete', ...
+                                   ... 'Coding','onevsall', ...
+                                   'Learners','svm');   %train support vector mahcine
                     LabelPredicted = predict(mdl, tstD);       % predict classes for new data
 
                     svm_predict(iter,t,i,:) = LabelPredicted;  % save predicted labels
