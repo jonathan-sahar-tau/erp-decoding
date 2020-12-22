@@ -18,7 +18,6 @@ if nargin == 0
     subjects = [11 13 14 15 16 17 19 20 21];
 end
 % subjects = [11 13] %14 15 16];
-subjects
 nSubs = length(subjects);
 
 % parameters to set
@@ -159,7 +158,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
         % set up time points
         tois = ismember(data.time.pre:2:data.time.post,svmECOC.time);
-        nTimes = length(tois);
+        nTimes = size(eegs, 3);
 
         % # of trials
         svmECOC.nTrials = length(posBin); nTrials = svmECOC.nTrials;
@@ -175,7 +174,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         tic
         parfor c = 1:nElectrodes
               tmp = eegfilt(squeeze(eegs(:,c,:)),Fs,freqs(1,1),freqs(1,2)); % low pass filter
-              filtData(:,c,:) = tmp(:,1:nTimes); 
+              filtData(:,c,:) = tmp(:,1:nTimes);
         end
         toc
     
@@ -237,7 +236,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
             posBins = 1:nBins;
 
-            blockDat_filtData = nan(nBins*nBlocks,nElectrodes,nSamps);  % averaged & filtered EEG data with resampling at 50 Hz
+            blockDat_filtData = nan(nBins*nBlocks,nElectrodes,nTimes);  % averaged & filtered EEG data with resampling at 50 Hz
 
             labels = nan(nBins*nBlocks,1);  % bin labels for averaged & filtered EEG data
 
@@ -249,8 +248,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
                 for iii = 1:nBlocks
 
-                    blockDat_filtData(bCnt,:,:) = squeeze(mean(filtData(posBin==posBins(ii) & blocks==iii,:,tois),1));
-
+                    blockDat_filtData(bCnt,:,:) = squeeze(mean(filtData(posBin==posBins(ii) & blocks==iii,:,:),1)); %average trials into blocks
                     labels(bCnt) = ii;
 
                     blockNum(bCnt) = iii;
@@ -261,6 +259,9 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
             end
 
+            blockDat_filtData = movmean(blockDat_filtData, 4, 3); % sliding window of 4 samples across time dimension
+            resamplingRatio = floor(nTimes/nSamps)
+            blockDat_filtData = blockDat_filtData(:,:,1:resamplingRatio:end); % resample down to 100Hz
             % Do SVM_ECOC at each time point
             for t = 1:nSamps
 
@@ -270,7 +271,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
                 % average across time window of interest
 
-                dataAtTimeT = squeeze(mean(blockDat_filtData(:,:,toi),3));  
+                dataAtTimeT = blockDat_filtData(:,:,t);  
 
                 % Do SVM_ECOC for each block
                 for i=1:nBlocks % loop through blocks, holding each out as the test set
