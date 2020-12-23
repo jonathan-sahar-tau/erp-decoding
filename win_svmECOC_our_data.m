@@ -15,20 +15,20 @@ function svmECOC_our_data(subjects)
 % parpool
 
 if nargin == 0
-    subjects = [11 13 14 15 16 17 19 20 21];
+    subjects = [11 13 14 15] % 16 17 19 20 21];
 end
 % subjects = [11 13] %14 15 16];
 nSubs = length(subjects);
-subjects
+subjects;
 % parameters to set
 
-svmECOC.conditions = ["cong_int", "cong_scr"]; %, "inc_int"];
+svmECOC.conditions = ["cong_int", "cong_scr", "inc_int"];
 
 svmECOC.nChans = numel(svmECOC.conditions); % # of channels
 
 svmECOC.nBins = svmECOC.nChans; % # of stimulus bins
 
-svmECOC.nIter = 1; % # of iterations
+svmECOC.nIter = 10; % # of iterations
 
 svmECOC.nBlocks = 3; % # of blocks for cross-validation
 
@@ -91,11 +91,9 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         subjectName = num2str(subject, '%03.f');
         fprintf('Subject:\t%d\n',subject);
         
-        % assign an integer value to each condition, so we can later put all the data in
-        % one matrix and reference it with this number.
-        enumVal = 1;
 
-        for condition = conditions
+        for i  = 1:numel(conditions)
+            condition = conditions(i);
             exportFileName = strcat(subjectName, '_', condition, '_bc', '.mat');
             exportLocation = strcat(exportDataLocation, '\', exportFileName);
 
@@ -103,17 +101,17 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
             load(exportLocation); %into variable tempData
             tempData = rmfield(tempData, fieldsToDelete);
 
-            % swap the the matrix dimensions, effectively transposing the
-            % "inner" (electrode) matrices to be nTrials x nSamples -
-            % every row is the time course of one trial
+            % swap the the matrix dimensions so that they're
+            % nTrials x nElectrodes x nSamples
             tempData.data = permute(tempData.data, [3, 1, 2]);
             EEG.(condition) = tempData;
             EEG.(condition).name = condition;
-            EEG.(condition).enumVal = enumVal;
+            % assign an integer value to each condition, so we can later put all the data in
+            % one matrix and reference it with this number.
+            EEG.(condition).enumVal = i;
 
             % get the minimal number of trials across conditions
-            trialNums(enumVal) = EEG.(condition).trials;
-            enumVal = enumVal + 1;
+            trialNums(i) = EEG.(condition).trials;
 
         end
 
@@ -122,8 +120,8 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         nTrialsPerCondition = nTrialsPerAveragedTrial * nAveragedTrials;
 
         % normalize all conditions to have the same number of time points in each trial recording
-        for condition = conditions
-            enumVal = EEG.(condition).enumVal;
+        for enumVal  = 1:numel(conditions)
+            condition = conditions(enumVal);
             conditionData{enumVal} =  EEG.(condition).data(1:nTrialsPerCondition,:,:);
             conditionLabels{enumVal} = repmat(enumVal, nTrialsPerCondition, 1); 
         end
@@ -136,7 +134,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         data.time.pre = data.times(1);
         data.time.post = data.times(end);
         
-        resamplingRatio = 1000/100; % % resample the data during analysis to 100 Hz
+        resamplingRatio = 1000/100; % resample the data during analysis to 100 Hz
         svmECOC.time = data.time.pre:resamplingRatio:data.time.post; % time points of interest in the analysis
         times = svmECOC.time;
         nSamps = length(svmECOC.time);
@@ -152,7 +150,9 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         % grab EEG data
         eegs = data.eeg;
 
-        nTimes = size(eegs, 3);
+        % set up time points
+        tois = ismember(data.time.pre:2:data.time.post,svmECOC.time);
+        nTimes = length(tois);
 
         % # of trials
         svmECOC.nTrials = length(posBin); nTrials = svmECOC.nTrials;
@@ -230,7 +230,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
             posBins = 1:nBins;
 
-            blockDat_filtData = nan(nBins*nBlocks,nElectrodes,nTimes);  % averaged & filtered EEG data with resampling at 50 Hz
+            blockDat_filtData = nan(nBins*nBlocks,nElectrodes,nSamps);  % averaged & filtered EEG data with resampling at 50 Hz
 
             labels = nan(nBins*nBlocks,1);  % bin labels for averaged & filtered EEG data
 
@@ -242,7 +242,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
                 for iii = 1:nBlocks
 
-                    blockDat_filtData(bCnt,:,:) = squeeze(mean(filtData(posBin==posBins(ii) & blocks==iii,:,:),1)); %average trials into blocks
+                    blockDat_filtData(bCnt,:,:) = squeeze(mean(filtData(posBin==posBins(ii) & blocks==iii,:,tois),1)); %average trials into blocks
                     labels(bCnt) = ii;
 
                     blockNum(bCnt) = iii;
@@ -253,16 +253,14 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
             end
 
-            blockDat_filtData = movmean(blockDat_filtData, svmECOC.window, 3); % sliding window of 4 samples across time dimension
-            resamplingRatio = floor(nTimes/nSamps);
-            blockDat_filtData = blockDat_filtData(:,:,1:resamplingRatio:end); % resample down to 100Hz
             % Do SVM_ECOC at each time point
             for t = 1:nSamps
 
                 % grab data for timepoint t
+                toi = ismember(times,times(t)-svmECOC.window/2:times(t)+svmECOC.window/2);
                 % average across time window of interest
 
-                dataAtTimeT = blockDat_filtData(:,:,t);  
+                dataAtTimeT = squeeze(mean(blockDat_filtData(:,:,toi),3));
 
                 % Do SVM_ECOC for each block
                 for i=1:nBlocks % loop through blocks, holding each out as the test set
@@ -312,7 +310,8 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
 
     save(OutputfName,'svmECOC','-v7.3');
     toc(subjectTic)
-    fprintf('average iteration time: %03.f seconds\n', mean(timings));
+    m = mean(timings);
+%     fprintf('average iteration time: %03.f seconds\n', m);
 
     end % end of subject loop
    
@@ -348,6 +347,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         subplot(2, numPlotsPerFigure/2, plotIdx(i));
         plot(times, allResults(i, :)*100);
         ylim([0 120])
+        xlim([times(1) times(end)]);
         xlabel('Time')
         ylabel('success rate %')
         titleString = sprintf('Sucess rate, subject %d', subjects(i));
