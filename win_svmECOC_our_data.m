@@ -15,7 +15,7 @@ function svmECOC_our_data(subjects)
 % parpool
 
 if nargin == 0
-    subjects = [11 13 14 15] % 16 17 19 20 21];
+    subjects = [11 13 14 15 16 17];
 end
 % subjects = [11 13] %14 15 16];
 nSubs = length(subjects);
@@ -173,7 +173,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         toc
 
         % Loop through each iteration
-        timings = nan(1:nIter);
+        timings = nan(1, nIter);
         for iter = 1:nIter
             fprintf("training iteration %d\n", iter);
             iterTic = tic; % start timing iteration loop
@@ -333,7 +333,7 @@ allSuccessRates = nan(nCVBlocks, numel(subjects));
         tmp =  load(resultsFile);
         svmECOC = tmp.svmECOC;
         results{i} = svmECOC.successRatesTime;
-        fprintf('subject %s, max success rate: %03.f, mean success rate: %03.f\n', subjectName,  max(svmECOC.successRatesTime), mean(svmECOC.successRatesTime));
+        fprintf('subject %d, max success rate: %02.f%%, mean success rate: %02.f%%\n', sub,  max(svmECOC.successRatesTime)* 100, mean(svmECOC.successRatesTime) * 100);
     end
     allResults = cat(1, results{:});
     times = tmp.svmECOC.time;
