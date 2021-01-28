@@ -25,104 +25,78 @@ if nargin == 0
 
 end
 
+    C = Constants();
+    subjects = C.subjects;
     nSubjects = length(subjects);
     debugAddBump = 0
     debugApplyLowpassFilter = 1
     % parameters to set
 
-    allElectrodesInOrder = ["Vertical", "Horizontal", "Fp1", "AF7", "AF3", "F1", "F3", "F5", "F7", "FT7", "FC5", "FC3", "FC1", "C1", "C3", "C5", "T7", "TP7", "CP5", "CP3", "CP1", "P1", "P3", "P5", "P7", "P9", "PO7", "PO3", "O1", "Iz", "Oz", "POz", "Pz", "CPz", "Fpz", "Fp2", "AF8", "AF4", "AFz", "Fz", "F2", "F4", "F6", "F8", "FT8", "FC6", "FC4", "FC2", "FCz", "Cz", "C2", "C4", "C6", "T8", "TP8", "CP6", "CP4", "CP2", "P2", "P4", "P6", "P8", "P10", "PO8"]
+    allElectrodesInOrder = C.allElectrodesInOrder;
 
-    frontalElectrodes = ["Fp1", "AF7", "AF3", "F1", "F3", "F5", "F7", "FT7", "FC5", "FC3", "FC1", "Fpz", "Fp2", "AF8", "AF4", "AFz", "Fz", "F2", "F4", "F6", "F8", "FT8", "FC6", "FC4", "FC2", "FCz"]
+    frontalElectrodes = C.frontalElectrodes;
 
-    centralElectrodes = ["F1", "F3", "F5", "F7", "Fz", "F2", "F4", "F6","FT7", "FT8", "FC5", "FC3", "FC1", "T7", "C1", "C3", "C5","TP7", "CP5", "CP3","P7", "CP1", "P1", "P3", "P5",  "Iz", "Pz", "CPz", "FC6", "FC4", "FC2", "FCz", "Cz", "C2", "C4", "C6", "T8", "CP6", "CP4", "CP2", "TP8", "P2", "P4", "P6", "P8"]
+    centralElectrodes = C.centralElectrodes;
 
-    occipitalElectrodes = ["P1", "P3", "P5", "P7", "P9", "PO7", "PO3", "O1", "Iz", "Oz", "POz", "Pz", "P2", "P4", "P6", "P8", "P10", "PO8", "PO4", "O2"]
+    occipitalElectrodes = C.occipitalElectrodes;
 
     combinedElectrodes = union(centralElectrodes, occipitalElectrodes);
-
-    % conditionPairs{1} = ["cong_int", "inc_int"]
-    % conditionPairs{2} = ["cong_int", "cong_scr"]
-    % conditionPairs{3} = ["cong_int", "inc_int", "cong_scr"]
-
     
-    % conditionPairs{1} = ["ConInt", "IncInt"]
-    % conditionPairs{2} = ["ConInt", "ConScr"]
-    % conditionPairs{3} = ["ConInt", "IncInt", "ConScr"]
+    conditionDesc = "Congruency";
 
-    
-    % conditionDesc =  ["congruency", "intactness", "3-way"]
-    conditionDesc =  ["intactness"]
-
-    conditionPairs{1} = ["ConInt", "IncInt", "ConScr", "IncScr"]
-    labels = [1, 1, 2, 2]; % intact = 1, scrambled = 2
+    conditions = ["ConInt", "IncInt"] %, "ConScr", "IncScr"]
+    labels = [1, 2] %, 1, 2]; % intact = 1, scrambled = 2
 
 
-    svmECOC.nIter = 10; % # of iterations
     
-    svmECOC.nCVBlocks = 3; % # of blocks for cross-validation
+    nCVBlocks = 3; % # of blocks for cross-validation
     
-    svmECOC.frequencies = [0 30]; % low pass filter
+    frequencies = [0 30]; % low pass filter
     
-    svmECOC.window = 4; % 1 data point per 4 ms in the preprocessed data
+    window = 4; % 1 data point per 4 ms in the preprocessed data
     
-    svmECOC.Fs = 512 ; % sampling rate of the preprocessed data for filtering
+    Fs = 512 ; % sampling rate of the preprocessed data for filtering
     
     
     % for brevity in analysis
     
-    nIter = svmECOC.nIter;
-    
-    nCVBlocks = svmECOC.nCVBlocks;
-    nAveragedTrials = nCVBlocks;
-    
-    freqs = svmECOC.frequencies;
-    
-    Fs = svmECOC.Fs;
-    
-    svmTemplate = templateSVM('KernelFunction','linear');
-    
-    fieldsToDelete = {'filename', 'filepath', 'subject', 'group', ...
-        'condition', 'setname', 'session', 'srate', ...
-        'xmin', 'xmax', 'icaact', 'icawinv', ...
-        'icasphere', 'icaweights', 'icachansind', 'chanlocs', ...
-        'urchanlocs', 'chaninfo', 'ref', 'event', ...
-        'urevent', 'eventdescription', 'epoch', 'epochdescription', ...
-        'reject', 'stats', 'specdata', 'specicaact', ...
-        'splinefile', 'icasplinefile', 'dipfit', 'history', ...
-        'saved', 'etc', 'run'};
-    % baseDir("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\")
-    baseDir = "C:\Users\Jonathan\Google Drive\Msc neuroscience\lab\analysis_scripts\erp-decoding\";
-    eeglabPath = strcat(baseDir, "software\eeglab2020_0");
-    
-%     dataLocation = strcat(baseDir, "experiment_data\");
-%     dataLocation = strcat(baseDir, "experiment_data\unconscious_conditions\");
-    dataLocation = strcat(baseDir, "experiment_data\conscious_conditions_long_exposure\");
-    outputDir = strcat(baseDir, "output\");
-    resultsDir = strcat(outputDir, 'mat-files\');
-    figuresDir = strcat(outputDir, 'figures\');
-    
+    nIter = C.nIter;
 
-    nCVBlocks = 3;
+    nCVBlocks = C.nCVBlocks;
+    nAveragedTrials = C.nAveragedTrials;
+    
+    freqs = C.frequencies;
+    
+    Fs = C.Fs;
+    
+    svmTemplate = C.svmTemplate;
+    
+    fieldsToDelete = C.fieldsToDelete;
+
+    baseDir = C.baseDir;
+    eeglabPath = C.eeglabPath;
+    dataLocation = C.dataLocation;
+    outputDir = C.outputDir;
+    resultsDir = C.resultsDir;
+    figuresDir = C.figuresDir;
+    
     averagedSuccessRates = nan(numel(subjects), 1);
     allSuccessRates = nan(nCVBlocks, numel(subjects));
-    
-for c = 1:numel(conditionPairs)
     
     % set the conditions and the most relevant electrode for those conditions
     % ----------------------------
 
-    relevantElectrodes = allElectrodesInOrder; %
-    svmECOC.conditions = conditionPairs{c}
+    relevantElectrodes = centralElectrodes; 
 
-    svmECOC.nConditions = numel(svmECOC.conditions); % # of channels
-    svmECOC.nBins = numel(unique(labels)); % # of stimulus bins
+    nConditions = numel(conditions); % # of channels
+    nBins = numel(unique(labels)); % # of stimulus bins
 
-    svmECOC.nElectrodes = numel(relevantElectrodes); % # of electrode included in the analysis
-    conditions = svmECOC.conditions;
-    nElectrodes = svmECOC.nElectrodes;
-    nChans = svmECOC.nConditions;
-    nBins = svmECOC.nBins;
+    nElectrodes = numel(relevantElectrodes); % # of electrode included in the analysis
+    conditions = conditions;
+    nChans = nConditions;
+    nBins = nBins;
     
+    analysisTic = tic;
     %% Loop through participants
     for subjectIdx = 1:numel(subjects)
         subjectTic = tic;
@@ -190,10 +164,11 @@ for c = 1:numel(conditionPairs)
         allLabels = cat(1, conditionLabels{:});
         
         data.eeg = allData;
+        data.labels = allLabels;
         data.times = floor(EEG.(conditions(1)).times);
         data.time.pre = data.times(1);
         data.time.post = data.times(end);
-
+  
         if debugAddBump == 1
             figure
             subplot(2, 2, 1);
@@ -203,36 +178,35 @@ for c = 1:numel(conditionPairs)
         end
 
         resamplingRatio = 1000/250; % resample the data during analysis to 250 Hz
-        svmECOC.time = data.time.pre:resamplingRatio:data.time.post; % time points of interest in the analysis
-        times = svmECOC.time;
-        nSamps = length(svmECOC.time);
+        downsampledTimes = data.time.pre:resamplingRatio:data.time.post; % time points of interest in the analysis
+        nSamps = length(downsampledTimes);
         
         % set up locaiton bin of each trial
-        svmECOC.posBin = allLabels;
-        posBin = svmECOC.posBin;
+        posBin = data.labels;
+        posBin = posBin;
         
         eegs = data.eeg;
         
         % set up time points
-        tois = ismember(data.time.pre:2:data.time.post,svmECOC.time);
+        tois = ismember(data.time.pre:2:data.time.post,downsampledTimes);
         nTimes = length(tois);
         
         % # of trials
-        svmECOC.nTrials = length(posBin);
-        nTrials = svmECOC.nTrials;
+        nTrials = length(posBin);
+        nTrials = nTrials;
         
         % Preallocate Matrices
         svm_predict = nan(nIter,nSamps,nCVBlocks,nBins); % a matrix to save prediction from SVM
         tst_target = nan(nIter,nSamps,nCVBlocks,nBins);  % a matrix to save true target values
         
-        svmECOC.blocks = nan(nTrials,nIter);  % create svmECOC.block to save block assignments
+        blocksAssign = nan(nTrials,nIter);  % create block to save block assignments
         
         % low-pass filtering
         filtData = nan(nTrials,nElectrodes,nTimes);
 
         if debugApplyLowpassFilter == 1
             tic
-            parfor c = 1:nElectrodes
+            for c = 1:nElectrodes
                     tmp = eegfilt(squeeze(eegs(:,c,:)),Fs,freqs(1,1),freqs(1,2)); % low pass filter
                     filtData(:,c,:) = tmp(:,1:nTimes);
             end
@@ -243,7 +217,6 @@ for c = 1:numel(conditionPairs)
 
         
         % Loop through each iteration
-        timings = nan(1, nIter);
         for iter = 1:nIter
             fprintf("training iteration %d\n", iter);
             iterTic = tic; % start timing iteration loop
@@ -292,9 +265,9 @@ for c = 1:numel(conditionPairs)
             
             % save block assignment
             
-            svmECOC.blocks(:,iter) = blocks; % block assignment
+            blocksAssign(:,iter) = blocks; % block assignment
             
-            svmECOC.nTrialsPerBlock = length(blocks(blocks == 1)); % # of trials per block
+            nTrialsPerBlock = length(blocks(blocks == 1)); % # of trials per block
             
             % Average data for each position bin across blocks
             
@@ -328,10 +301,12 @@ for c = 1:numel(conditionPairs)
             parfor t = 1:nSamps
                 
                 % grab data for timepoint t
-                toi = ismember(times,times(t)-svmECOC.window/2:times(t)+svmECOC.window/2);
+                toi = ismember(downsampledTimes,downsampledTimes(t)-window/2:downsampledTimes(t)+window/2);
                 % average across time window of interest
-                
                 dataAtTimeT = squeeze(mean(blockDat_filtData(:,:,toi),3));
+                
+                %actually, take a sliding window average across the tois (which are downsampled), and sample from
+                %it
                 dataAtTimeT = slidingWindowAverage(:,:,t);
                 % Do SVM_ECOC for each block
                 for i=1:nCVBlocks % loop through blocks, holding each out as the test set
@@ -359,36 +334,32 @@ for c = 1:numel(conditionPairs)
                 
             end % end of time points
             
-            timings(iter) = toc(iterTic); % stop timing the iteration loop
         end % end of iteration
-        
+        toc(iterTic)
         
         
         OutputfName = strcat(resultsDir, ...
             subjectName, '_', ...
             strjoin(conditions, '_'), ...
-            '_results', ...
+            '_results_central_electrodes', ...
             '.mat');
-
+        
+        svmECOC.data = data;
+        svmECOC.data.electrodes = relevantElectrodes;
+        svmECOC.data.nElectrodes = numel(relevantElectrodes);
+        svmECOC.downsampledTimes = downsampledTimes;
         svmECOC.nCVBlocks = nCVBlocks;
         svmECOC.targets = tst_target;
         svmECOC.modelPredict = svm_predict;
         svmECOC.testResults =  svmECOC.targets == svmECOC.modelPredict;
         svmECOC.overallSuccessRatePcnt =  mean(svmECOC.testResults, "all") * 100;
         svmECOC.successRatesTime = mean(svmECOC.testResults, [1 3 4]);
-        tmp = sort(svmECOC.successRatesTime, 'descend');
-        svmECOC.topSuccessRates = tmp(1:10);
         
         save(OutputfName,'svmECOC','-v7.3');
         toc(subjectTic)
-        m = mean(timings);
-        %     fprintf('average iteration time: %03.f seconds\n', m);
         
     end % end of subject loop
 
-    %     OutputfName = strcat(outputDir, 'congruency_and_intactness_results_all.mat');
-    %     save(OutputfName,'allSubjectSuccessRatesTime','-v7.3');
-    
     
     for i = 1:numel(subjects)
         sub = subjects(i);
@@ -397,31 +368,30 @@ for c = 1:numel(conditionPairs)
         resultsFile = strcat(resultsDir, ...
             subjectName, '_', ...
             strjoin(conditions, '_'), ...
-            '_results',  ...
+            '_results_central_electrodes',  ...
             '.mat');
         tmp =  load(resultsFile);
         svmECOC = tmp.svmECOC;
         results{i} = svmECOC.successRatesTime;
-        fprintf('subject %d, max success rate: %02.f%%, mean success rate: %02.f%%\n', sub,  max(svmECOC.successRatesTime)* 100, mean(svmECOC.successRatesTime) * 100);
     end
     
     allResults = cat(1, results{:});
-    times = tmp.svmECOC.time;
+    times = svmECOC.downsampledTimes;
     
     numPlotsPerFigure = 6;
     plotIdx = repmat(1:numPlotsPerFigure, 1, floor(numel(subjects)/numPlotsPerFigure + 1));
     for i = 1:numel(subjects)
         if  mod(i, numPlotsPerFigure) == 1
             figure('units','normalized', 'WindowState', 'maximized')
-            titleString = sprintf('Decoding conditions: %s', conditionDesc(c));
+            titleString = sprintf('Decoding conditions: %s', conditionDesc);
             % titleString = sprintf('Decoding conditions: %s %s %s',strrep(string(conditions), '_', '-'));
             sgtitle(titleString)
         end
         subplot(2, numPlotsPerFigure/2, plotIdx(i));
         plot(times, allResults(i, :)*100);
         hold on
-        plot(times, repmat((1/numel(conditions) * 100), 1, numel(times)), 'b--');
-        plot(times, repmat((1/numel(conditions) * 100 * 2), 1, numel(times)), 'b--');
+        plot(times, repmat((1/numel(unique(labels)) * 100), 1, numel(times)), 'b--');
+        plot(times, repmat((1/numel(unique(labels)) * 100 * 2), 1, numel(times)), 'b--');
         hold off
         
         ylim([0 120])
@@ -436,12 +406,10 @@ for c = 1:numel(conditionPairs)
             else %i == numel(subjects)
                 firstSubIdx = i - mod(i, numPlotsPerFigure) +1
             end
-            figureFileName = sprintf('%d-%d-%s',subjects(firstSubIdx), subjects(i), conditionDesc(c));
+            figureFileName = sprintf('%d-%d-%s',subjects(firstSubIdx), subjects(i), conditionDesc);
             figureFileName = strcat(figuresDir, 'latest\', figureFileName);
             print(gcf, figureFileName, '-djpeg',  '-r0');
         end
     end
-    
-end
-
+    toc(analysisTic)
 end
