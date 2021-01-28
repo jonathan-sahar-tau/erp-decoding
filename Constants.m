@@ -28,15 +28,6 @@ classdef Constants
         frontalElectrodes
         centralElectrodes
         occipitalElectrodes
-        
-        %   conditionPairs{1} = ["cong_int", "inc_int"]
-        %   conditionPairs{2} = ["cong_int", "cong_scr"]
-        %   conditionPairs{3} = ["cong_int", "inc_int", "cong_scr"]
-        %         conditionPairs{1} = ["ConInt", "IncInt"]
-        %         conditionPairs{2} = ["ConInt", "ConScr"]
-        %         conditionPairs{3} = ["ConInt", "IncInt", "ConScr"]
-        %
-        
 
         nIter = 10; % # of iterations
         frequencies = [0 30]; % low pass filter
@@ -60,13 +51,10 @@ classdef Constants
     end
        methods
            function obj = Constants(subjects)
-%                if nargin ~= 0
-%                    obj.subjects = [102 104:106 108:112 114:116 118:120 122]
-%                else
-%                    obj.subjects = subjects;
-%                end
-                   obj.subjects = [102 104:106 108:112 114:116 118:120 122]
+                   obj.subjects = [102]
 
+%                    obj.subjects = [102 104:106 108:112 114:116 118:120 122]
+                                      
                 % obj.baseDir("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\")
                 % obj.dataLocation = strcat(baseDir, "experiment_data\");
                 % obj.dataLocation = strcat(baseDir, "experiment_data\unconscious_conditions\");
