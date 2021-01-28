@@ -15,16 +15,6 @@ function svmECOC_our_data(subjects)
 % delete(gcp)
 % parpool
 
-if nargin == 0
-%         subjects = [102 104:106 108 109]
-    %     subjects = [201] %:206]
-%         subjects = [11 13:17 19:21];
-%     subjects = [22 24:27 29 30 35:42]
-                subjects = [102 104:106 108:112 114:116 118:120 122]
-
-
-end
-
     C = Constants();
     subjects = C.subjects;
     nSubjects = length(subjects);
@@ -45,23 +35,9 @@ end
     conditionDesc = "Congruency";
 
     conditions = ["ConInt", "IncInt"] %, "ConScr", "IncScr"]
-    labels = [1, 2] %, 1, 2]; % intact = 1, scrambled = 2
-
-
-    
-    nCVBlocks = 3; % # of blocks for cross-validation
-    
-    frequencies = [0 30]; % low pass filter
-    
-    window = 4; % 1 data point per 4 ms in the preprocessed data
-    
-    Fs = 512 ; % sampling rate of the preprocessed data for filtering
-    
-    
-    % for brevity in analysis
+    origLabels = [1, 2] %, 1, 2]; % intact = 1, scrambled = 2
     
     nIter = C.nIter;
-
     nCVBlocks = C.nCVBlocks;
     nAveragedTrials = C.nAveragedTrials;
     
@@ -86,10 +62,10 @@ end
     % set the conditions and the most relevant electrode for those conditions
     % ----------------------------
 
-    relevantElectrodes = centralElectrodes; 
+    relevantElectrodes = allElectrodesInOrder; 
 
     nConditions = numel(conditions); % # of channels
-    nBins = numel(unique(labels)); % # of stimulus bins
+    nBins = numel(unique(origLabels)); % # of stimulus bins
 
     nElectrodes = numel(relevantElectrodes); % # of electrode included in the analysis
     conditions = conditions;
@@ -155,10 +131,8 @@ end
                 EEG.(condition).data(1:nTrialsPerCondition,...
                 electrodeIdx, ...
                 :);
-            conditionLabels{conditionIdx} = repmat(labels(conditionIdx), nTrialsPerCondition, 1);
+            conditionLabels{conditionIdx} = repmat(origLabels(conditionIdx), nTrialsPerCondition, 1);
         end
-        
-        clear labels;
         
         allData = cat(1, conditionData{:});
         allLabels = cat(1, conditionLabels{:});
@@ -182,9 +156,7 @@ end
         nSamps = length(downsampledTimes);
         
         % set up locaiton bin of each trial
-        posBin = data.labels;
-        posBin = posBin;
-        
+        posBin = data.labels;        
         eegs = data.eeg;
         
         % set up time points
@@ -298,10 +270,10 @@ end
             
             slidingWindowAverage = movmean(blockDat_filtData ,3, 3);
             % Do SVM_ECOC at each time point
-            parfor t = 1:nSamps
+           for t = 1:nSamps
                 
                 % grab data for timepoint t
-                toi = ismember(downsampledTimes,downsampledTimes(t)-window/2:downsampledTimes(t)+window/2);
+                toi = ismember(downsampledTimes,downsampledTimes(t)-C.window/2:downsampledTimes(t)+C.window/2);
                 % average across time window of interest
                 dataAtTimeT = squeeze(mean(blockDat_filtData(:,:,toi),3));
                 
@@ -341,7 +313,7 @@ end
         OutputfName = strcat(resultsDir, ...
             subjectName, '_', ...
             strjoin(conditions, '_'), ...
-            '_results_central_electrodes', ...
+            '_results_all_electrodes', ...
             '.mat');
         
         svmECOC.data = data;
@@ -368,7 +340,7 @@ end
         resultsFile = strcat(resultsDir, ...
             subjectName, '_', ...
             strjoin(conditions, '_'), ...
-            '_results_central_electrodes',  ...
+            '_results_all_electrodes',  ...
             '.mat');
         tmp =  load(resultsFile);
         svmECOC = tmp.svmECOC;
@@ -383,22 +355,22 @@ end
     for i = 1:numel(subjects)
         if  mod(i, numPlotsPerFigure) == 1
             figure('units','normalized', 'WindowState', 'maximized')
-            titleString = sprintf('Decoding conditions: %s', conditionDesc);
+            titleString = sprintf('Decoding conditions: %s all electrodes', conditionDesc);
             % titleString = sprintf('Decoding conditions: %s %s %s',strrep(string(conditions), '_', '-'));
             sgtitle(titleString)
         end
         subplot(2, numPlotsPerFigure/2, plotIdx(i));
         plot(times, allResults(i, :)*100);
         hold on
-        plot(times, repmat((1/numel(unique(labels)) * 100), 1, numel(times)), 'b--');
-        plot(times, repmat((1/numel(unique(labels)) * 100 * 2), 1, numel(times)), 'b--');
+        plot(times, repmat(((1/nBins) * 100), 1, numel(times)), 'b--');
+        plot(times, repmat((1/nBins * 100 * 2), 1, numel(times)), 'b--');
         hold off
         
         ylim([0 120])
         xlim([times(1) times(end)]);
         xlabel('Time')
         ylabel('success rate %')
-        titleString = sprintf('Sucess rate, subject %d', subjects(i));
+        titleString = sprintf('Sucess rate, subject %d ', subjects(i));
         title(titleString)
         if  mod(i, numPlotsPerFigure) == 0 || i == numel(subjects)
             if  mod(i, numPlotsPerFigure) == 0
@@ -406,7 +378,7 @@ end
             else %i == numel(subjects)
                 firstSubIdx = i - mod(i, numPlotsPerFigure) +1
             end
-            figureFileName = sprintf('%d-%d-%s',subjects(firstSubIdx), subjects(i), conditionDesc);
+            figureFileName = sprintf('%d-%d-%s-all-electrodes',subjects(firstSubIdx), subjects(i), conditionDesc);
             figureFileName = strcat(figuresDir, 'latest\', figureFileName);
             print(gcf, figureFileName, '-djpeg',  '-r0');
         end
