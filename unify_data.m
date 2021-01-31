@@ -1,20 +1,14 @@
-function svmECOC_our_data(subjects)
+function unify_data(subjects)
 
     C = Constants();
     subjects = C.subjects;
     nSubjects = C.nSubjects;
-    debugAddBump = 0
-    debugApplyLowpassFilter = 1
-    % parameters to set
-
+    suffix = '';
     combinedElectrodes = union(C.centralElectrodes, C.occipitalElectrodes);
 
 
-    conditions = ["ConInt"] %, "IncInt", "ConScr", "IncScr"]
+    conditions = ["ConInt", "IncInt", "ConScr", "IncScr"]
     nConditions = numel(conditions);
-
-    origLabels = [1, 2, 3, 4]; % must be same length as conditions array
-
 
     analysisTic = tic;
     %% Loop through participants
@@ -51,11 +45,10 @@ function svmECOC_our_data(subjects)
         % normalize all conditions to have the same number of time points in each trial recording
         for conditionIdx  = 1:numel(conditions)
             condition = conditions(conditionIdx);
-            electrodeIdx = ismember(C.allElectrodesInOrder, relevantElectrodes);
             conditionData{conditionIdx} =  ...
                 EEG.(condition).data(1:nTrialsPerCondition,...
                 :, :);
-            conditionLabels{conditionIdx} = repmat(origLabels(conditionIdx), nTrialsPerCondition, 1);
+            conditionLabels{conditionIdx} = repmat(C.origLabels(conditionIdx), nTrialsPerCondition, 1);
         end
 
         allData = cat(1, conditionData{:});

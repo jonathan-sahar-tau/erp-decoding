@@ -11,87 +11,69 @@
 % Gi-Yeul Bae 2017.10.3.
 
 
-function svmECOC_our_data(subjects)
+function decode_eeg(subjects)
 % delete(gcp)
 % parpool
 
     C = Constants();
     subjects = C.subjects;
     nSubjects = C.nSubjects;
-    debugAddBump = 0
     debugApplyLowpassFilter = 1
     % parameters to set
+    suffix = ''
 
     combinedElectrodes = union(C.centralElectrodes, C.occipitalElectrodes);
     
-
-    conditions = ["ConInt"] %, "IncInt", "ConScr", "IncScr"]
-    nConditions = numel(conditions);
-
-    origLabels = [1]%, 2] %, 1, 2]; % intact = 1, scrambled = 2
-    nBins = numel(unique(origLabels)); % # of different classes
-
+    
+    relevantConditionsIdx = [1, 2] %, 3, 4];
+    relevantLabels = C.origLabels(relevantConditionsIdx);
+    
     conditionDesc = "Congruency";
 
-    averagedSuccessRates = nan(numel(subjects), 1);
-    allSuccessRates = nan(C.nCVBlocks, numel(subjects));
+    averagedSuccessRates = nan(nSubjects, 1);
+    allSuccessRates = nan(C.nCVBlocks, nSubjects);
 
     relevantElectrodes = C.allElectrodesInOrder;
     nElectrodes = numel(relevantElectrodes); % # of electrode included in the analysis
 
-    nChans = nConditions;
-
+    nChans = C.nConditions;
+    nBins = C.nUniqueLables;
     analysisTic = tic;
     %% Loop through participants
-    for subjectIdx = 1:numel(subjects)
+    for subjectIdx = 1:nSubjects
         subjectTic = tic;
         subject = subjects(subjectIdx);
         subjectName = num2str(subject, '%03.f');
         fprintf('Subject:\t%d\n',subject);
-        
-        
-        for conditionIdx  = 1:numel(conditions)
-            condition = conditions(conditionIdx);
-            fileName = strcat(subjectName, '_', condition, '_bc', '.mat')
-            filePath = strcat(C.dataLocation, '\', fileName);
-            
-            tempData = load(filePath);
-            tempData = tempData.EEGData;
-            % tempData = rmfield(tempData, C.fieldsToDelete);
-            
-            % swap the the matrix dimensions so that they're
-            % nTrials x nElectrodes x nSamples
-            tempData.data = permute(tempData.data, [3, 1, 2]);
-            EEG.(condition) = tempData;
-            EEG.(condition).name = condition;
 
-            % get the minimal number of trials across conditions
-            trialNums(conditionIdx) = EEG.(condition).trials;
-        end
-        
-        % find the actual # of trials that can accomodate our desired # of averagedTrials,
-        nTrialsPerAveragedTrial = floor(min(trialNums)/C.nAveragedTrials);
-        nTrialsPerCondition = nTrialsPerAveragedTrial * C.nAveragedTrials;
+        outputfName = strcat(C.resultsDir, ...
+            subjectName, '_', ...
+            strjoin(C.conditions, '_'), ...
+            '_results', ...
+            suffix, ...
+            '.mat');
 
-        % normalize all conditions to have the same number of time points in each trial recording
-        for conditionIdx  = 1:numel(conditions)
-            condition = conditions(conditionIdx);
-            electrodeIdx = ismember(C.allElectrodesInOrder, relevantElectrodes);
-            conditionData{conditionIdx} =  ...
-                EEG.(condition).data(1:nTrialsPerCondition,...
-                electrodeIdx, ...
-                :);
-            conditionLabels{conditionIdx} = repmat(origLabels(conditionIdx), nTrialsPerCondition, 1);
+
+        inputFileName = strcat(C.resultsDir, ...
+            subjectName, '_', ...
+            'data_all_conditions', ...
+            suffix, ...
+            '.mat');
+
+        load(inputFileName); % into "data" variable
+
+        if C.translateLabels == 1
+            nBins = numel(unique(C.labelTranslation)); % # of different classes
+            for i = relevantConditionsIdx
+                data.labels(data.labels == conditionDescriptors{i}.labelTranslation) = conditionDescriptors{i}.labelTranslation;
+            end
         end
-        
-        allData = cat(1, conditionData{:});
-        allLabels = cat(1, conditionLabels{:});
-        
-        data.eeg = allData;
-        data.labels = allLabels;
-        data.times = floor(EEG.(conditions(1)).times);
-        data.time.pre = data.times(1);
-        data.time.post = data.times(end);
+
+        % filter out the irrelevant electrodes and trials based on simulus (condition) label
+        electrodeIdx = ismember(C.allElectrodesInOrder, relevantElectrodes);
+        labelIdx = ismember(data.labels, relevantLabels);
+        data.eeg = data.eeg(labelIdx, electrodeIdx, :);
+        data.labels = data.labels(labelIdx);
 
         resamplingRatio = 1000/250; % resample the data during analysis to 250 Hz
         downsampledTimes = data.time.pre:resamplingRatio:data.time.post; % time points of interest in the analysis
@@ -99,8 +81,7 @@ function svmECOC_our_data(subjects)
         
         % set up locaiton bin of each trial
         posBin = data.labels;        
-        eegs = data.eeg;
-        
+
         % set up time points
         tois = ismember(data.time.pre:2:data.time.post,downsampledTimes);
         nTimes = length(tois);
@@ -121,12 +102,12 @@ function svmECOC_our_data(subjects)
         if debugApplyLowpassFilter == 1
             tic
             for c = 1:nElectrodes
-                    tmp = eegfilt(squeeze(eegs(:,c,:)),C.Fs,(1,1),(1,2)); % low pass filter
+                    tmp = eegfilt(squeeze(data.eeg(:,c,:)),C.Fs,C.frequencies(1,1),C.frequencies(1,2)); % low pass filter
                     filtData(:,c,:) = tmp(:,1:nTimes);
             end
             toc
         else
-            filtData = eegs(:,:,1:nTimes);
+            filtData = data.eeg(:,:,1:nTimes);
         end
 
         
@@ -252,13 +233,7 @@ function svmECOC_our_data(subjects)
         toc(iterTic)
         
         
-        OutputfName = strcat(C.resultsDir, ...
-            subjectName, '_', ...
-            strjoin(conditions, '_'), ...
-            '_results_all_electrodes', ...
-            '.mat');
-        
-        svmECOC.data = data;
+        % svmECOC.data = data;
         svmECOC.data.electrodes = relevantElectrodes;
         svmECOC.data.nElectrodes = numel(relevantElectrodes);
         svmECOC.downsampledTimes = downsampledTimes;
@@ -269,20 +244,22 @@ function svmECOC_our_data(subjects)
         svmECOC.overallSuccessRatePcnt =  mean(svmECOC.testResults, "all") * 100;
         svmECOC.successRatesTime = mean(svmECOC.testResults, [1 3 4]);
         
-        save(OutputfName,'svmECOC','-v7.3');
+        save(outputfName,'svmECOC','-v7.3');
         toc(subjectTic)
         
     end % end of subject loop
 
-    
-    for i = 1:numel(subjects)
+    % load saved results files
+    % ----------------------
+    for i = 1:nSubjects
         sub = subjects(i);
         subjectName = num2str(sub, '%03.f')
         
         resultsFile = strcat(C.resultsDir, ...
             subjectName, '_', ...
-            strjoin(conditions, '_'), ...
-            '_results_all_electrodes',  ...
+            strjoin(C.conditions, '_'), ...
+            '_results',  ...
+            suffix,  ...
             '.mat');
         tmp =  load(resultsFile);
         svmECOC = tmp.svmECOC;
@@ -291,10 +268,13 @@ function svmECOC_our_data(subjects)
     
     allResults = cat(1, results{:});
     times = svmECOC.downsampledTimes;
-    
+
+
+    % plot results
+    % ------------
     numPlotsPerFigure = 6;
-    plotIdx = repmat(1:numPlotsPerFigure, 1, floor(numel(subjects)/numPlotsPerFigure + 1));
-    for i = 1:numel(subjects)
+    plotIdx = repmat(1:numPlotsPerFigure, 1, floor(nSubjects/numPlotsPerFigure + 1));
+    for i = 1:nSubjects
         if  mod(i, numPlotsPerFigure) == 1
             figure('units','normalized', 'WindowState', 'maximized')
             titleString = sprintf('Decoding conditions: %s all electrodes', conditionDesc);
@@ -314,13 +294,13 @@ function svmECOC_our_data(subjects)
         ylabel('success rate %')
         titleString = sprintf('Sucess rate, subject %d ', subjects(i));
         title(titleString)
-        if  mod(i, numPlotsPerFigure) == 0 || i == numel(subjects)
+        if  mod(i, numPlotsPerFigure) == 0 || i == nSubjects
             if  mod(i, numPlotsPerFigure) == 0
                 firstSubIdx = i - numPlotsPerFigure +1;
-            else %i == numel(subjects)
+            else %i == nSubjects
                 firstSubIdx = i - mod(i, numPlotsPerFigure) +1
             end
-            figureFileName = sprintf('%d-%d-%s-all-electrodes',subjects(firstSubIdx), subjects(i), conditionDesc);
+            figureFileName = sprintf('%d-%d-%s-%s',subjects(firstSubIdx), subjects(i), conditionDesc, suffix);
             figureFileName = strcat(C.figuresDir, 'latest\', figureFileName);
             print(gcf, figureFileName, '-djpeg',  '-r0');
         end
