@@ -16,13 +16,12 @@ function plot_results(subjects)
             '_results',  ...
             suffix,  ...
             '.mat');
-        tmp =  load(resultsFile);
-        svmECOC = tmp.svmECOC;
-        results{s} = svmECOC.successRatesTime;
+        load(resultsFile); into "decoder"
+        results{s} = decoder.successRatesTime;
     end
 
     allResults = cat(1, results{:});
-    times = tmp.svmECOC.downsampledTimes;
+    times = decoder.downsampledTimes;
 
    
     numPlotsPerFigure = 6;

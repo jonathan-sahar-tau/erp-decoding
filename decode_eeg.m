@@ -18,7 +18,7 @@ function decode_eeg(subjects)
     C = Constants();
     subjects = C.subjects;
     nSubjects = C.nSubjects;
-    debugApplyLowpassFilter = 1
+    bApplyLowpassFilter = 1
     % parameters to set
     suffix = ''
 
@@ -37,7 +37,7 @@ function decode_eeg(subjects)
     nElectrodes = numel(relevantElectrodes); % # of electrode included in the analysis
 
     nChans = C.nConditions;
-    nBins = C.nUniqueLables;
+    nClasses = C.nUniqueLables;
     analysisTic = tic;
     %% Loop through participants
     for subjectIdx = 1:nSubjects
@@ -63,7 +63,6 @@ function decode_eeg(subjects)
         load(inputFileName); % into "data" variable
 
         if C.translateLabels == 1
-            nBins = numel(unique(C.labelTranslation)); % # of different classes
             for i = relevantConditionsIdx
                 data.labels(data.labels == conditionDescriptors{i}.labelTranslation) = conditionDescriptors{i}.labelTranslation;
             end
@@ -79,27 +78,23 @@ function decode_eeg(subjects)
         downsampledTimes = data.time.pre:resamplingRatio:data.time.post; % time points of interest in the analysis
         nSamps = length(downsampledTimes);
         
-        % set up locaiton bin of each trial
-        posBin = data.labels;        
-
         % set up time points
         tois = ismember(data.time.pre:2:data.time.post,downsampledTimes);
         nTimes = length(tois);
         
         % # of trials
-        nTrials = length(posBin);
-        nTrials = nTrials;
-        
+        nTrials = numel(data.labels);
+
         % Preallocate Matrices
-        svm_predict = nan(C.nIter,nSamps,C.nCVBlocks,nBins); % a matrix to save prediction from SVM
-        tst_target = nan(C.nIter,nSamps,C.nCVBlocks,nBins);  % a matrix to save true target values
+        svm_predict = nan(C.nIter,nSamps,C.nCVBlocks,nClasses); % a matrix to save prediction from SVM
+        iterTestLabels = nan(C.nIter,nSamps,C.nCVBlocks,nClasses);  % a matrix to save true target values
         
         blocksAssign = nan(nTrials,C.nIter);  % create block to save block assignments
         
         % low-pass filtering
         filtData = nan(nTrials,nElectrodes,nTimes);
 
-        if debugApplyLowpassFilter == 1
+        if bApplyLowpassFilter == 1
             tic
             for c = 1:nElectrodes
                     tmp = eegfilt(squeeze(data.eeg(:,c,:)),C.Fs,C.frequencies(1,1),C.frequencies(1,2)); % low pass filter
@@ -117,17 +112,17 @@ function decode_eeg(subjects)
             iterTic = tic; % start timing iteration loop
             
             % preallocate arrays
-            blocks = nan(size(posBin));
+            blocks = nan(nTrials);
             
-            shuffBlocks = nan(size(posBin));
+            shuffBlocks = nan(nTrials);
             
             % count number of trials within each position bin
             
             clear binCnt
             
-            for bin = 1:nBins
+            for bin = 1:nClasses
                 
-                binCnt(bin) = sum(posBin == bin);
+                binCnt(bin) = sum(data.labels == bin);
                 
             end
             
@@ -139,11 +134,11 @@ function decode_eeg(subjects)
             
             shuffInd = randperm(nTrials)'; % create shuffle index
             
-            shuffBin = posBin(shuffInd); % shuffle trial order
+            shuffBin = data.labels(shuffInd); % shuffle trial order
             
             % take the 1st nPerBin x C.nCVBlocks trials for each position bin.
             
-            for bin = 1:nBins;
+            for bin = 1:nClasses;
                 
                 idx = find(shuffBin == bin); % get index for trials belonging to the current bin
                 
@@ -165,22 +160,20 @@ function decode_eeg(subjects)
             nTrialsPerBlock = length(blocks(blocks == 1)); % # of trials per block
             
             % Average data for each position bin across blocks
+
+            blockDat_filtData = nan(nClasses*C.nCVBlocks,nElectrodes,nSamps);  % averaged & filtered EEG data with resampling at 50 Hz
             
-            posBins = 1:nBins;
+            labels = nan(nClasses*C.nCVBlocks,1);  % bin labels for averaged & filtered EEG data
             
-            blockDat_filtData = nan(nBins*C.nCVBlocks,nElectrodes,nSamps);  % averaged & filtered EEG data with resampling at 50 Hz
-            
-            labels = nan(nBins*C.nCVBlocks,1);  % bin labels for averaged & filtered EEG data
-            
-            blockNum = nan(nBins*C.nCVBlocks,1); % block numbers for averaged & filtered EEG data
+            blockNum = nan(nClasses*C.nCVBlocks,1); % block numbers for averaged & filtered EEG data
             
             bCnt = 1;
             
-            for ii = 1:nBins
+            for ii = 1:nClasses
                 
                 for iii = 1:C.nCVBlocks
                     
-                    blockDat_filtData(bCnt,:,:) = squeeze(mean(filtData(posBin==posBins(ii) & blocks==iii,:,tois),1)); %downsample and average trials into blocks
+                    blockDat_filtData(bCnt,:,:) = squeeze(mean(filtData(data.labels==C.uniqueLables(ii) & blocks==iii,:,tois),1)); %downsample and average trials into blocks
                     labels(bCnt) = ii;
                     
                     blockNum(bCnt) = iii;
@@ -223,7 +216,7 @@ function decode_eeg(subjects)
                     
                     svm_predict(iter,t,i,:) = LabelPredicted;  % save predicted labels
                     
-                    tst_target(iter,t,i,:) = tstl;             % save true target labels
+                    iterTestLabels(iter,t,i,:) = tstl;             % save true target labels
                     
                 end % end of block
                 
@@ -233,18 +226,18 @@ function decode_eeg(subjects)
         toc(iterTic)
         
         
-        % svmECOC.data = data;
-        svmECOC.data.electrodes = relevantElectrodes;
-        svmECOC.data.nElectrodes = numel(relevantElectrodes);
-        svmECOC.downsampledTimes = downsampledTimes;
-        svmECOC.nCVBlocks = C.nCVBlocks;
-        svmECOC.targets = tst_target;
-        svmECOC.modelPredict = svm_predict;
-        svmECOC.testResults =  svmECOC.targets == svmECOC.modelPredict;
-        svmECOC.overallSuccessRatePcnt =  mean(svmECOC.testResults, "all") * 100;
-        svmECOC.successRatesTime = mean(svmECOC.testResults, [1 3 4]);
+        decoder.data = data;
+        decoder.data.electrodes = relevantElectrodes;
+        decoder.data.nElectrodes = numel(relevantElectrodes);
+        decoder.downsampledTimes = downsampledTimes;
+        decoder.nCVBlocks = C.nCVBlocks;
+        decoder.targets = iterTestLabels;
+        decoder.modelPredict = svm_predict;
+        decoder.testResults =  decoder.targets == decoder.modelPredict;
+        decoder.overallSuccessRatePcnt =  mean(decoder.testResults, "all") * 100;
+        decoder.successRatesTime = mean(decoder.testResults, [1 3 4]);
         
-        save(outputfName,'svmECOC','-v7.3');
+        save(outputfName,'decoder','-v7.3');
         toc(subjectTic)
         
     end % end of subject loop
@@ -261,13 +254,12 @@ function decode_eeg(subjects)
             '_results',  ...
             suffix,  ...
             '.mat');
-        tmp =  load(resultsFile);
-        svmECOC = tmp.svmECOC;
-        results{i} = svmECOC.successRatesTime;
+        load(resultsFile); % into "decoder"
+        results{i} = decoder.successRatesTime;
     end
     
     allResults = cat(1, results{:});
-    times = svmECOC.downsampledTimes;
+    times = decoder.downsampledTimes;
 
 
     % plot results
@@ -284,8 +276,8 @@ function decode_eeg(subjects)
         subplot(2, numPlotsPerFigure/2, plotIdx(i));
         plot(times, allResults(i, :)*100);
         hold on
-        plot(times, repmat(((1/nBins) * 100), 1, numel(times)), 'b--');
-        plot(times, repmat((1/nBins * 100 * 2), 1, numel(times)), 'b--');
+        plot(times, repmat(((1/nClasses) * 100), 1, numel(times)), 'b--');
+        plot(times, repmat((1/nClasses * 100 * 2), 1, numel(times)), 'b--');
         hold off
         
         ylim([0 120])

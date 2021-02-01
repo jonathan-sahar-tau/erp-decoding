@@ -16,13 +16,13 @@ function plot_mean_and_error(subjects)
             '_results',  ...
             '.mat');
         tmp =  load(resultsFile);
-        svmECOC = tmp.svmECOC;
-        results{s} = svmECOC.successRatesTime;
-        fprintf('subject %s, max success rate: %d, mean success rate: %d\n', subjectName,  max(svmECOC.successRatesTime), mean(svmECOC.successRatesTime));
+        decoder = tmp.decoder;
+        results{s} = decoder.successRatesTime;
+        fprintf('subject %s, max success rate: %d, mean success rate: %d\n', subjectName,  max(decoder.successRatesTime), mean(decoder.successRatesTime));
     end
 
         allResults = 100 * cat(1, results{:});
-        times = tmp.svmECOC.downsampledTimes;
+        times = tmp.decoder.downsampledTimes;
         means = mean(allResults);
         SEs = std(allResults)/sqrt(size(allResults, 1));
         

@@ -7,6 +7,7 @@ classdef Constants
         origLabels
         translateLabels
         labelTranslation
+        uniqueLables
         nUniqueLables
         conditionDescriptors
         conditions
@@ -102,9 +103,11 @@ classdef Constants
 
                 if obj.translateLabels == 1
                     obj.nUniqueLables = numel(unique(obj.labelTranslation)); % # of different classes
+                    obj.uniqueLables = obj.labelTranslation; % # of different classes
 
                 else
                     obj.nUniqueLables = numel(unique(obj.origLabels)); % # of different classes
+                    obj.uniqueLables = obj.origLabels; % # of different classes
                 end
 
 %                 obj.conditionDescriptors = nan(numel(obj.conditions));
