@@ -3,14 +3,10 @@ function unify_data(subjects)
     C = Constants();
     subjects = C.subjects;
     nSubjects = C.nSubjects;
-    suffix = '';
+    suffix = '_bc'
     combinedElectrodes = union(C.centralElectrodes, C.occipitalElectrodes);
-
-
-    conditions = ["ConInt", "IncInt", "ConScr", "IncScr"]
-    nConditions = numel(conditions);
-
-    analysisTic = tic;
+    bApplyLowpassFilter = 1
+    
     %% Loop through participants
     for subjectIdx = 1:numel(subjects)
         subjectTic = tic;
@@ -19,22 +15,19 @@ function unify_data(subjects)
         fprintf('Subject:\t%d\n',subject);
 
 
-        for conditionIdx  = 1:numel(conditions)
-            condition = conditions(conditionIdx);
-            fileName = strcat(subjectName, '_', condition, '_bc', '.mat')
+        for conditionIdx  = 1:C.nConditions
+            condition = C.conditions(conditionIdx)
+            fileName = strcat(subjectName, '_', condition, suffix, '.mat')
             filePath = strcat(C.dataLocation, '\', fileName);
 
-            tempData = load(filePath);
-            tempData = tempData.EEGData;
-            % tempData = rmfield(tempData, C.fieldsToDelete);
-
+            load(filePath); %into EEGData
             % swap the the matrix dimensions so that they're
             % nTrials x nElectrodes x nSamples
-            tempData.data = permute(tempData.data, [3, 1, 2]);
-            EEG.(condition) = tempData;
+            EEGData.data = permute(EEGData.data, [3, 1, 2]);
+            EEG.(condition) = EEGData;
             EEG.(condition).name = condition;
 
-            % get the minimal number of trials across conditions
+            % get the minimal number of trials across C.conditions
             trialNums(conditionIdx) = EEG.(condition).trials;
         end
 
@@ -42,9 +35,9 @@ function unify_data(subjects)
         nTrialsPerAveragedTrial = floor(min(trialNums)/C.nAveragedTrials);
         nTrialsPerCondition = nTrialsPerAveragedTrial * C.nAveragedTrials;
 
-        % normalize all conditions to have the same number of time points in each trial recording
-        for conditionIdx  = 1:numel(conditions)
-            condition = conditions(conditionIdx);
+        % normalize all C.conditions to have the same number of time points in each trial recording
+        for conditionIdx  = 1:C.nConditions
+            condition = C.conditions(conditionIdx);
             conditionData{conditionIdx} =  ...
                 EEG.(condition).data(1:nTrialsPerCondition,...
                 :, :);
@@ -53,18 +46,40 @@ function unify_data(subjects)
 
         allData = cat(1, conditionData{:});
         allLabels = cat(1, conditionLabels{:});
-
-        data.eeg = allData;
-        data.labels = allLabels;
-        data.times = floor(EEG.(conditions(1)).times);
+        
+             
+        data.times = floor(EEG.(C.conditions(1)).times);
         data.time.pre = data.times(1);
         data.time.post = data.times(end);
+        
+        downsampledTimes = data.time.pre:C.resamplingRatio:data.time.post; % time points of interest in the analysis
+        nTotalTrials = numel(allLabels);
+
+        tois = ismember(data.time.pre:2:data.time.post,downsampledTimes);
+        nTimes = length(tois);
+        nElectrodes = numel(C.allElectrodesInOrder);
+        filteredData = nan(nTotalTrials,nElectrodes,nTimes);
+       if bApplyLowpassFilter == 1
+            parfor electrodeIdx = 1:nElectrodes
+                    tmp = eegfilt(squeeze(allData(:,electrodeIdx,:)),C.Fs,C.frequencies(1,1),C.frequencies(1,2)); % low pass filter
+                    filteredData(:,electrodeIdx,:) = tmp(:,1:nTimes);
+            end
+            allData = filteredData;
+            data.downsampledTimes = downsampledTimes;
+       else
+       
+       end
+
+        
+        data.eeg = allData;
+        data.labels = allLabels;
+
 
 
         outputfName = strcat(C.resultsDir, ...
             subjectName, '_', ...
             'data_all_conditions', ...
-            suffix, ...
+            C.data_suffix, ...
             '.mat');
 
         save(outputfName,'data','-v7.3');

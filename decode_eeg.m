@@ -18,27 +18,32 @@ function decode_eeg(subjects)
     C = Constants();
     subjects = C.subjects;
     nSubjects = C.nSubjects;
-    bApplyLowpassFilter = 1
-    % parameters to set
-    suffix = ''
-
+    bApplyLowpassFilter = 0
+    bPlotResults = 0
+    
     combinedElectrodes = union(C.centralElectrodes, C.occipitalElectrodes);
     
-    
-    relevantConditionsIdx = [1, 2] %, 3, 4];
-    relevantLabels = C.origLabels(relevantConditionsIdx);
-    
-    conditionDesc = "Congruency";
-
     averagedSuccessRates = nan(nSubjects, 1);
     allSuccessRates = nan(C.nCVBlocks, nSubjects);
 
-    relevantElectrodes = C.allElectrodesInOrder;
+    relevantElectrodes = C.allElectrodesInOrder(3:end);
     nElectrodes = numel(relevantElectrodes); % # of electrode included in the analysis
-
-    nChans = C.nConditions;
+    
+    nCVBlocks    = C.nCVBlocks; % otherwise the parfor loop won't work
+    % global values that we may want to override
+    % ------------------------------
+    relevantConditionsIdx = 1:C.nConditions;
+    relevantLabels = C.origLabels;
     nClasses = C.nUniqueLables;
+    
+    % overriding global values here
+    % ------------------------------
+%     relevantConditionsIdx = [1, 2] %, 3, 4];
+%     relevantLabels = C.origLabels(relevantConditionsIdx);
+%     nClasses = numel(relevantLabels);
+%     
     analysisTic = tic;
+    
     %% Loop through participants
     for subjectIdx = 1:nSubjects
         subjectTic = tic;
@@ -47,24 +52,25 @@ function decode_eeg(subjects)
         fprintf('Subject:\t%d\n',subject);
 
         outputfName = strcat(C.resultsDir, ...
-            subjectName, '_', ...
-            strjoin(C.conditions, '_'), ...
-            '_results', ...
-            suffix, ...
-            '.mat');
+                             subjectName, '_', ...
+                             C.conditionDesc, ...
+                             '_results', ...
+                             C.data_suffix, ...
+                             C.result_suffix, ...
+                             '.mat');
 
 
         inputFileName = strcat(C.resultsDir, ...
             subjectName, '_', ...
             'data_all_conditions', ...
-            suffix, ...
+            C.data_suffix, ...
             '.mat');
 
         load(inputFileName); % into "data" variable
 
         if C.translateLabels == 1
             for i = relevantConditionsIdx
-                data.labels(data.labels == conditionDescriptors{i}.labelTranslation) = conditionDescriptors{i}.labelTranslation;
+                data.labels(data.labels == C.conditionDescriptors{i}.labelTranslation) = C.conditionDescriptors{i}.labelTranslation;
             end
         end
 
@@ -112,9 +118,9 @@ function decode_eeg(subjects)
             iterTic = tic; % start timing iteration loop
             
             % preallocate arrays
-            blocks = nan(nTrials);
+            blocks = nan(nTrials,1);
             
-            shuffBlocks = nan(nTrials);
+            shuffBlocks = nan(nTrials, 1);
             
             % count number of trials within each position bin
             
@@ -186,7 +192,7 @@ function decode_eeg(subjects)
             
             slidingWindowAverage = movmean(blockDat_filtData ,3, 3);
             % Do SVM_ECOC at each time point
-           for t = 1:nSamps
+           parfor t = 1:nSamps
                 
                 % grab data for timepoint t
                 toi = ismember(downsampledTimes,downsampledTimes(t)-C.window/2:downsampledTimes(t)+C.window/2);
@@ -197,7 +203,7 @@ function decode_eeg(subjects)
                 %it
                 dataAtTimeT = slidingWindowAverage(:,:,t);
                 % Do SVM_ECOC for each block
-                for i=1:C.nCVBlocks % loop through blocks, holding each out as the test set
+                for i=1:nCVBlocks % loop through blocks, holding each out as the test set
                     
                     trnl = labels(blockNum~=i); % training labels
                     
@@ -242,6 +248,7 @@ function decode_eeg(subjects)
         
     end % end of subject loop
 
+    if bPlotResults == 1
     % load saved results files
     % ----------------------
     for i = 1:nSubjects
@@ -252,7 +259,7 @@ function decode_eeg(subjects)
             subjectName, '_', ...
             strjoin(C.conditions, '_'), ...
             '_results',  ...
-            suffix,  ...
+            C.results_suffix,  ...
             '.mat');
         load(resultsFile); % into "decoder"
         results{i} = decoder.successRatesTime;
@@ -269,7 +276,7 @@ function decode_eeg(subjects)
     for i = 1:nSubjects
         if  mod(i, numPlotsPerFigure) == 1
             figure('units','normalized', 'WindowState', 'maximized')
-            titleString = sprintf('Decoding conditions: %s all electrodes', conditionDesc);
+            titleString = sprintf('Decoding conditions: %s%s', C.conditionDesc, C.results_suffix);
             % titleString = sprintf('Decoding conditions: %s %s %s',strrep(string(conditions), '_', '-'));
             sgtitle(titleString)
         end
@@ -292,10 +299,11 @@ function decode_eeg(subjects)
             else %i == nSubjects
                 firstSubIdx = i - mod(i, numPlotsPerFigure) +1
             end
-            figureFileName = sprintf('%d-%d-%s-%s',subjects(firstSubIdx), subjects(i), conditionDesc, suffix);
+            figureFileName = sprintf('%d-%d-%s-%s',subjects(firstSubIdx), subjects(i), C.conditionDesc, C.results_suffix);
             figureFileName = strcat(C.figuresDir, 'latest\', figureFileName);
             print(gcf, figureFileName, '-djpeg',  '-r0');
         end
     end
     toc(analysisTic)
+    end
 end

@@ -8,7 +8,7 @@ function preprocess_data(subjects)
     dataLocation = C.dataLocation;
     outputDir = C.outputDir;
     numElectrodes = 64;
-    exportDataLocation = strcat(baseDir, "analysis_scripts\erp-decoding\experiment_data\");
+    exportDataLocation = C.dataLocation;
     addpath(eeglabPath);
 
 %% Loop through participants
@@ -16,17 +16,13 @@ function preprocess_data(subjects)
         subject = subjects(subjectIdx);
         subjectName = num2str(subject, '%03.f');
         fprintf('Subject:\t%d\n',subject);
-
-        % assign an integer value to each condition, so we can later put all the data in
-        % one matrix and reference it with this number.
-        enumVal = 1;
-
-        for condition = conditions
-            currentFilename= strcat(subjectName, '_', condition, '_bc', '.vhdr');
-            exportFileName = strcat(subjectName, '_', condition, '_bc', '.mat');
+        
+        for condition = C.conditions
+            currentFilename= strcat('N300_', subjectName, '_', condition, '_filtered_6Hz', '.vhdr');
+            exportFileName = strcat(subjectName, '_', condition, C.data_suffix, '.mat');
             exportLocation = strcat(exportDataLocation, '\', exportFileName);
-            tempData = (pop_loadbv(dataLocation, currentFilename, [], 1:numElectrodes));
-            save(exportLocation, 'tempData', '-v7.3')
+            EEGData = (pop_loadbv(dataLocation, currentFilename, [], 1:numElectrodes));
+            save(exportLocation, 'EEGData', '-v7.3')
         end
     end
 end
