@@ -4,14 +4,19 @@ classdef Constants
         subjects;
         nSubjects;
 
+        origConditions
         origLabels
-        translateLabels
+        origLabelTranslation
+
+        conditions
+        labels
         labelTranslation
+
+        nConditions
+        relevantConditionsIdx
+        bTranslateLabels
         uniqueLables
         nUniqueLables
-        conditionDescriptors
-        conditions
-        nConditions
 
         baseDir
         dataLocation
@@ -26,6 +31,9 @@ classdef Constants
 
         allElectrodesInOrder = ["Vertical", "Horizontal", "Fp1", "AF7", "AF3", "F1", "F3", "F5", "F7", "FT7", "FC5", "FC3", "FC1", "C1", "C3", "C5", "T7", "TP7", "CP5", "CP3", "CP1", "P1", "P3", "P5", "P7", "P9", "PO7", "PO3", "O1", "Iz", "Oz", "POz", "Pz", "CPz", "Fpz", "Fp2", "AF8", "AF4", "AFz", "Fz", "F2", "F4", "F6", "F8", "FT8", "FC6", "FC4", "FC2", "FCz", "Cz", "C2", "C4", "C6", "T8", "TP8", "CP6", "CP4", "CP2", "P2", "P4", "P6", "P8", "P10", "PO8"]
 
+        allElectrodes
+        relevantElectrodes
+        
         leftFrontalElectrodes
         middleFrontalElectrodes
         rightFrontalElectrodes
@@ -42,7 +50,10 @@ classdef Constants
         centralElectrodes
         occipitalElectrodes
 
-        nIter = 3; % # of iterations
+        
+
+        
+        nIter = 10; % # of iterations
         frequencies = [0 30]; % low pass filter
         nCVBlocks = 3;
         window = 4; % 1 data point per 4 ms in the preprocessed data
@@ -65,9 +76,9 @@ classdef Constants
     end
        methods
            function obj = Constants(subjects)
-                   obj.subjects = [102]
+%                obj.subjects = [102, 104];
 
-%                    obj.subjects = [102 104:106 108:112 114:116 118:120 122]
+                   obj.subjects = [102 104:106 108:112 114:116 118:120 122];
                                       
                 % obj.baseDir("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\")
                 % obj.dataLocation = strcat(baseDir, "experiment_data\");
@@ -78,10 +89,12 @@ classdef Constants
                 obj.dataLocation = strcat(obj.baseDir, "experiment_data\exp1_conscious_long_exposure\");
                 obj.outputDir = strcat(obj.baseDir, "output\");
                 obj.resultsDir = strcat(obj.outputDir, 'mat-files\');
+%                 obj.resultsDir = strcat(obj.outputDir, 'mat-files-temp\');
                 obj.figuresDir = strcat(obj.outputDir, 'figures\');
 
                 obj.eeglabPath = strcat(obj.baseDir, "software\eeglab2020_0");
                 
+                obj.allElectrodes = obj.allElectrodesInOrder(3:end) % remove horizontal and vertical
                 obj.leftFrontalElectrodes = ["Fp1", "AF7", "AF3", "F3", "F5", "F7"];
                 obj.middleFrontalElectrodes = ["FpZ", "AFZ", "F1" "Fz", "F2"];
                 obj.rightFrontalElectrodes = ["Fp2", "AF8", "AF4", "F4", "F6", "F8"];
@@ -93,43 +106,39 @@ classdef Constants
                 obj.leftOccipitalElectrodes = ["P3", "P5", "P7", "P9", "PO3", "PO7", "O1"];
                 obj.middleOcccipitalElectrodes = ["Pz", "P1", "P2", "POz", "Oz", "Iz"];
                 obj.rightOccipitalElectrodes = ["P4", "P6", "P8", "P10", "PO8"];
-                % obj.rightOccipitalElectrodes = ["P4", "P6", "P8", "P10", "PO4", "PO8", "O2"];
                 
                 obj.frontalElectrodes = union(union( obj.leftFrontalElectrodes,  obj.middleOcccipitalElectrodes),  obj.rightFrontalElectrodes);
                 obj.centralElectrodes = union(union( obj.leftCentralElectrodes,  obj.middleOcccipitalElectrodes),  obj.rightCentralElectrodes);
                 obj.occipitalElectrodes = union(union( obj.leftOccipitalElectrodes,  obj.middleOcccipitalElectrodes),  obj.rightOccipitalElectrodes);
 
-                obj.conditions = ["ConInt", "IncInt", "ConScr", "IncScr"]
+                obj.relevantElectrodes = obj.allElectrodes;
+                
+                obj.bTranslateLabels = 1; % whether to join together different conditions, e.g. "ConInt" and "IncInt" and tread them as "AllInc"
+
+                obj.origConditions = ["ConInt", "IncInt", "ConScr", "IncScr"];
                 obj.origLabels =        [1, 2, 3, 4];
-                obj.labelTranslation =  [1, 1, 2, 2];
+                obj.origLabelTranslation =  [1, 1, 2, 2];
+                obj.relevantConditionsIdx = 1:numel(obj.origConditions); % by default - use all conditions.
 
-                % obj.conditions = ["ConInt", "IncInt"]
-                % obj.origLabels =        [1, 2];
-                % obj.labelTranslation =  [1, 2];
+                obj = setLabelProperties(obj);
+            end %constructor
 
+
+            function obj = setLabelProperties(obj)
+                % narrow downs the condition & labels if required
+                obj.conditions = obj.origConditions(obj.relevantConditionsIdx);
+                obj.labels = obj.origLabels(obj.relevantConditionsIdx);
+                obj.labelTranslation = obj.origLabelTranslation(obj.relevantConditionsIdx);
                 obj.nConditions = numel(obj.conditions);
 
-                obj.translateLabels = 1; % whether to join together different conditions, e.g. "ConInt" and "IncInt" and tread them as "AllInc"
-
-                if obj.translateLabels == 1
-                    obj.nUniqueLables = numel(unique(obj.labelTranslation)); % # of different classes
-                    obj.uniqueLables = obj.labelTranslation; % # of different classes
-
+                if obj.bTranslateLabels == 1
+                    obj.uniqueLables = unique(obj.labelTranslation);
                 else
-                    obj.nUniqueLables = numel(unique(obj.origLabels)); % # of different classes
-                    obj.uniqueLables = obj.origLabels; % # of different classes
+                    obj.uniqueLables = obj.labels; % # of different classes
                 end
+                    obj.nUniqueLables = numel(obj.uniqueLables); % # of different classes
 
-%                 obj.conditionDescriptors = nan(numel(obj.conditions));
-                for i = 1:numel(obj.conditions)
-                    conditionDescriptor.name = obj.conditions(i)
-                    conditionDescriptor.label = obj.origLabels(i)
-                    conditionDescriptor.labelTranslation = obj.labelTranslation(i)
-                    obj.conditionDescriptors{i} = conditionDescriptor;
-                end
+            end %setLabelProperties
 
-
-
-           end
        end
 end

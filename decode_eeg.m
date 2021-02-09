@@ -11,38 +11,38 @@
 % Gi-Yeul Bae 2017.10.3.
 
 
-function decode_eeg(subjects)
+function decode_eeg(C)
 % delete(gcp)
 % parpool
+    if nargin ==  0
+        C = Constants();
+    end
 
-    C = Constants();
     subjects = C.subjects;
     nSubjects = C.nSubjects;
-    bApplyLowpassFilter = 0
-    bPlotResults = 0
+    bApplyLowpassFilter = 0;
+    bPlotResults = 0;
     
     combinedElectrodes = union(C.centralElectrodes, C.occipitalElectrodes);
     
     averagedSuccessRates = nan(nSubjects, 1);
     allSuccessRates = nan(C.nCVBlocks, nSubjects);
 
-    relevantElectrodes = C.allElectrodesInOrder(3:end);
+    relevantElectrodes = C.relevantElectrodes;
     nElectrodes = numel(relevantElectrodes); % # of electrode included in the analysis
     
-    nCVBlocks    = C.nCVBlocks; % otherwise the parfor loop won't work
-    % global values that we may want to override
-    % ------------------------------
-    relevantConditionsIdx = 1:C.nConditions;
-    relevantLabels = C.origLabels;
+    nCVBlocks = C.nCVBlocks; % otherwise the parfor loop won't work
     nClasses = C.nUniqueLables;
     
-    % overriding global values here
-    % ------------------------------
-%     relevantConditionsIdx = [1, 2] %, 3, 4];
-%     relevantLabels = C.origLabels(relevantConditionsIdx);
-%     nClasses = numel(relevantLabels);
-%     
     analysisTic = tic;
+    
+    outputFileNameResults = strcat(C.resultsDir, ...
+        C.conditionDesc, ...
+        '_results', ...
+        C.data_suffix, ...
+        C.result_suffix, ...
+        '.mat');
+
     
     %% Loop through participants
     for subjectIdx = 1:nSubjects
@@ -51,10 +51,11 @@ function decode_eeg(subjects)
         subjectName = num2str(subject, '%03.f');
         fprintf('Subject:\t%d\n',subject);
 
-        outputfName = strcat(C.resultsDir, ...
+        outputFileNameDecoder = strcat(C.resultsDir, ...
+                             'decoder-params-output/', ...
                              subjectName, '_', ...
                              C.conditionDesc, ...
-                             '_results', ...
+                             '_decoder_params', ...
                              C.data_suffix, ...
                              C.result_suffix, ...
                              '.mat');
@@ -67,16 +68,15 @@ function decode_eeg(subjects)
             '.mat');
 
         load(inputFileName); % into "data" variable
-
-        if C.translateLabels == 1
-            for i = relevantConditionsIdx
-                data.labels(data.labels == C.conditionDescriptors{i}.labelTranslation) = C.conditionDescriptors{i}.labelTranslation;
+        if C.bTranslateLabels == 1
+            for i = C.relevantConditionsIdx
+                data.labels(data.labels == C.labels(i)) = C.labelTranslation(i);
             end
         end
 
         % filter out the irrelevant electrodes and trials based on simulus (condition) label
         electrodeIdx = ismember(C.allElectrodesInOrder, relevantElectrodes);
-        labelIdx = ismember(data.labels, relevantLabels);
+        labelIdx = ismember(data.labels, C.labels);
         data.eeg = data.eeg(labelIdx, electrodeIdx, :);
         data.labels = data.labels(labelIdx);
 
@@ -242,11 +242,21 @@ function decode_eeg(subjects)
         decoder.testResults =  decoder.targets == decoder.modelPredict;
         decoder.overallSuccessRatePcnt =  mean(decoder.testResults, "all") * 100;
         decoder.successRatesTime = mean(decoder.testResults, [1 3 4]);
+        decoder.params = C;
         
-        save(outputfName,'decoder','-v7.3');
+        results{subjectIdx} = decoder.successRatesTime;
+        
+        save(outputFileNameDecoder,'decoder','-v7.3');
         toc(subjectTic)
         
     end % end of subject loop
+
+    
+    allResults = 100 * cat(1, results{:});
+    decodingResults.sucessRates = allResults;
+    decodingResults.downsampledTimes = decoder.downsampledTimes;
+    decodingResults.nClasses = nClasses;
+    save(outputFileNameResults,'decodingResults','-v7.3');
 
     if bPlotResults == 1
     % load saved results files
