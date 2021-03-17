@@ -29,7 +29,7 @@ function decode_eeg(C)
     allSuccessRates = nan(C.nCVBlocks, nSubjects);
 
     relevantElectrodes = C.relevantElectrodes;
-    nElectrodes = numel(relevantElectrodes); % # of electrode included in the analysis
+    nElectrodes = numel(relevantElectrodes);
     
     nCVBlocks = C.nCVBlocks; % otherwise the parfor loop won't work
     nClasses = C.nUniqueLables;
@@ -68,170 +68,133 @@ function decode_eeg(C)
             '.mat');
 
         load(inputFileName); % into "data" variable
+                             % perform the actual translation of the labels
         if C.bTranslateLabels == 1
             for i = C.relevantConditionsIdx
                 data.labels(data.labels == C.labels(i)) = C.labelTranslation(i);
             end
         end
 
-        % filter out the irrelevant electrodes and trials based on simulus (condition) label
+        % filter out the irrelevant electrodes and trials based on stimulus (condition) label
         electrodeIdx = ismember(C.allElectrodesInOrder, relevantElectrodes);
         labelIdx = ismember(data.labels, C.labels);
         data.eeg = data.eeg(labelIdx, electrodeIdx, :);
         data.labels = data.labels(labelIdx);
 
-        resamplingRatio = 1000/250; % resample the data during analysis to 250 Hz
-        downsampledTimes = data.time.pre:resamplingRatio:data.time.post; % time points of interest in the analysis
+        % create an array of time points belonging to the current analysis
+        % - downsampled by a factor of 2
+        downsampleFactor = 2;
+        origSamplingInterval = fix(1000/C.origSamplingFreq);
+        resamplingInterval = origSamplingInterval * downsampleFactor;
+        downsampledTimes = data.time.pre:resamplingInterval:data.time.post;
+
+        % create a boolean array with length equal to the number of timepoints in
+        % the original data, where "1" at an index i denotes that timepoint i should
+        % be used for this analysis - this will be used for the downsampling itself
+        nOrigDataPoints = fix((data.time.post - data.time.pre)/1000 * C.origSamplingFreq);
+        t1 = 1:nOrigDataPoints;
+        t2 = 1:2:nOrigDataPoints
+        relevantTimes = ismember(t1, t2);
+
         nSamps = length(downsampledTimes);
+        nTimes = length(relevantTimes);
         
-        % set up time points
-        tois = ismember(data.time.pre:2:data.time.post,downsampledTimes);
-        nTimes = length(tois);
-        
-        % # of trials
+        % overall # of trials (all conditions)
         nTrials = numel(data.labels);
 
-        % Preallocate Matrices
-        svm_predict = nan(C.nIter,nSamps,C.nCVBlocks,nClasses); % a matrix to save prediction from SVM
-        iterTestLabels = nan(C.nIter,nSamps,C.nCVBlocks,nClasses);  % a matrix to save true target values
-        
-        blocksAssign = nan(nTrials,C.nIter);  % create block to save block assignments
-        
-        % low-pass filtering
-        filtData = nan(nTrials,nElectrodes,nTimes);
+        % preallocate Matrices
+        svm_predict = nan(C.nIter,nSamps,C.nCVBlocks,nClasses); % a matrix for saving prediction from SVM
+        iterTestLabels = nan(C.nIter,nSamps,C.nCVBlocks,nClasses);  % a matrix for saving true target values
+        blocksAssign = nan(nTrials,C.nIter);  % a matrix for saving block assignments
 
-        if bApplyLowpassFilter == 1
-            tic
-            for c = 1:nElectrodes
-                    tmp = eegfilt(squeeze(data.eeg(:,c,:)),C.Fs,C.frequencies(1,1),C.frequencies(1,2)); % low pass filter
-                    filtData(:,c,:) = tmp(:,1:nTimes);
-            end
-            toc
-        else
-            filtData = data.eeg(:,:,1:nTimes);
-        end
+        filtData = data.eeg(:,:,1:nTimes);
 
-        
-        % Loop through each iteration
+        % bootstrapping iterations
         for iter = 1:C.nIter
             fprintf("training iteration %d\n", iter);
             iterTic = tic; % start timing iteration loop
             
-            % preallocate arrays
+            % block assignments for every trial
             blocks = nan(nTrials,1);
             
             shuffBlocks = nan(nTrials, 1);
             
             % count number of trials within each position bin
-            
             clear binCnt
-            
-            for bin = 1:nClasses
-                
-                binCnt(bin) = sum(data.labels == bin);
-                
+            for class = 1:nClasses
+                calssCnt(class) = sum(data.labels == class);
             end
             
-            minCnt = min(binCnt); % # of trials for position bin with fewest trials
-            
-            nPerBin = floor(minCnt/C.nCVBlocks); % max # of trials such that the # of trials for each bin can be equated within each block
+            minTrialsPerClass = min(calssCnt); % # of trials for position bin with fewest trials
+            nPerClass = floor(minTrialsPerClass/C.nCVBlocks); % max # of trials such that the # of trials for each bin can be equated within each block
             
             % shuffle trials
-            
             shuffInd = randperm(nTrials)'; % create shuffle index
+            shuffTrials = data.labels(shuffInd); % shuffle trial order
             
-            shuffBin = data.labels(shuffInd); % shuffle trial order
-            
-            % take the 1st nPerBin x C.nCVBlocks trials for each position bin.
-            
-            for bin = 1:nClasses;
-                
-                idx = find(shuffBin == bin); % get index for trials belonging to the current bin
-                
-                idx = idx(1:nPerBin*C.nCVBlocks); % drop excess trials
-                
-                x = repmat((1:C.nCVBlocks)',nPerBin,1); shuffBlocks(idx) = x; % assign randomly order trials to blocks - actually assign block IDs to data points
-                
+            % take the 1st nPerClass x C.nCVBlocks trials for each position bin.
+            for class = 1:nClasses;
+                idx = find(shuffTrials == class); % get index for trials belonging to the current class
+                idx = idx(1:nPerClass*C.nCVBlocks); % drop excess trials
+                x = repmat((1:C.nCVBlocks)',nPerClass,1); shuffBlocks(idx) = x; % assign randomly order trials to blocks - actually assign block IDs to data points
             end
             
             
             % unshuffle block assignment
-            
             blocks(shuffInd) = shuffBlocks;
             
             % save block assignment
-            
             blocksAssign(:,iter) = blocks; % block assignment
-            
             nTrialsPerBlock = length(blocks(blocks == 1)); % # of trials per block
             
             % Average data for each position bin across blocks
-
-            blockDat_filtData = nan(nClasses*C.nCVBlocks,nElectrodes,nSamps);  % averaged & filtered EEG data with resampling at 50 Hz
+            blockData = nan(nClasses*C.nCVBlocks,nElectrodes,nSamps);  % averaged EEG data with resampling
+            labels = nan(nClasses*C.nCVBlocks,1);  % bin labels for averaged EEG data
+            blockNum = nan(nClasses*C.nCVBlocks,1); % block numbers for averaged EEG data
             
-            labels = nan(nClasses*C.nCVBlocks,1);  % bin labels for averaged & filtered EEG data
-            
-            blockNum = nan(nClasses*C.nCVBlocks,1); % block numbers for averaged & filtered EEG data
-            
-            bCnt = 1;
-            
-            for ii = 1:nClasses
-                
-                for iii = 1:C.nCVBlocks
-                    
-                    blockDat_filtData(bCnt,:,:) = squeeze(mean(filtData(data.labels==C.uniqueLables(ii) & blocks==iii,:,tois),1)); %downsample and average trials into blocks
-                    labels(bCnt) = ii;
-                    
-                    blockNum(bCnt) = iii;
-                    
-                    bCnt = bCnt+1;
-                    
+            blockCounter = 1;
+            for class = 1:nClasses
+                for block = 1:C.nCVBlocks
+                    blockData(blockCounter,:,:) = squeeze(mean(filtData(data.labels==C.uniqueLables(class) & blocks == block,:,relevantTimes),1)); %downsample and average trials into blocks
+                    labels(blockCounter) = class;
+                    blockNum(blockCounter) = block;
+                    blockCounter = blockCounter+1;
                 end
-                
             end
             
-            slidingWindowAverage = movmean(blockDat_filtData ,3, 3);
-            % Do SVM_ECOC at each time point
+            % take a sliding window average across relevantTimes (which are downsampled)
+            slidingWindowAverage = movmean(blockData ,3, 3);
+
+           % train a classifier at each time point
            parfor t = 1:nSamps
-                
-                % grab data for timepoint t
-                toi = ismember(downsampledTimes,downsampledTimes(t)-C.window/2:downsampledTimes(t)+C.window/2);
-                % average across time window of interest
-                dataAtTimeT = squeeze(mean(blockDat_filtData(:,:,toi),3));
-                
-                %actually, take a sliding window average across the tois (which are downsampled), and sample from
-                %it
+               % sample from the sliding window average
                 dataAtTimeT = slidingWindowAverage(:,:,t);
-                % Do SVM_ECOC for each block
-                for i=1:nCVBlocks % loop through blocks, holding each out as the test set
-                    
+
+                % iterate over cross validation blocks, holding each out as the test set
+                for i=1:nCVBlocks
                     trnl = labels(blockNum~=i); % training labels
-                    
                     tstl = labels(blockNum==i); % test labels
-                    
                     trnD = dataAtTimeT(blockNum~=i,:);    % training data
-                    
                     tstD = dataAtTimeT(blockNum==i,:);    % test data
                     
-                    % SVM_ECOC
+                    % train the SVM
                     mdl = fitcecoc(trnD,trnl, ...
                         'Coding','ternarycomplete', ...
                         ... 'Coding','onevsall', ...
                         'Learners', C.svmTemplate);   %train support vector mahcine
-                    LabelPredicted = predict(mdl, tstD);       % predict classes for new data
+
+                    LabelPredicted = predict(mdl, tstD); % predict classes for new data
                     
                     svm_predict(iter,t,i,:) = LabelPredicted;  % save predicted labels
                     
-                    iterTestLabels(iter,t,i,:) = tstl;             % save true target labels
-                    
+                    iterTestLabels(iter,t,i,:) = tstl; % save true target labels
                 end % end of block
-                
             end % end of time points
-            
         end % end of iteration
+
         toc(iterTic)
         
-        
+        % save decoding parametersa and results for later analysis
         decoder.data = data;
         decoder.data.electrodes = relevantElectrodes;
         decoder.data.nElectrodes = numel(relevantElectrodes);
@@ -253,67 +216,15 @@ function decode_eeg(C)
 
     
     allResults = 100 * cat(1, results{:});
-    decodingResults.sucessRates = allResults;
+    decodingResults.successRates = allResults;
     decodingResults.downsampledTimes = decoder.downsampledTimes;
     decodingResults.nClasses = nClasses;
     save(outputFileNameResults,'decodingResults','-v7.3');
 
     if bPlotResults == 1
-    % load saved results files
-    % ----------------------
-    for i = 1:nSubjects
-        sub = subjects(i);
-        subjectName = num2str(sub, '%03.f')
-        
-        resultsFile = strcat(C.resultsDir, ...
-            subjectName, '_', ...
-            strjoin(C.conditions, '_'), ...
-            '_results',  ...
-            C.results_suffix,  ...
-            '.mat');
-        load(resultsFile); % into "decoder"
-        results{i} = decoder.successRatesTime;
+        plot_results(C);
     end
-    
-    allResults = cat(1, results{:});
-    times = decoder.downsampledTimes;
 
-
-    % plot results
-    % ------------
-    numPlotsPerFigure = 6;
-    plotIdx = repmat(1:numPlotsPerFigure, 1, floor(nSubjects/numPlotsPerFigure + 1));
-    for i = 1:nSubjects
-        if  mod(i, numPlotsPerFigure) == 1
-            figure('units','normalized', 'WindowState', 'maximized')
-            titleString = sprintf('Decoding conditions: %s%s', C.conditionDesc, C.results_suffix);
-            % titleString = sprintf('Decoding conditions: %s %s %s',strrep(string(conditions), '_', '-'));
-            sgtitle(titleString)
-        end
-        subplot(2, numPlotsPerFigure/2, plotIdx(i));
-        plot(times, allResults(i, :)*100);
-        hold on
-        plot(times, repmat(((1/nClasses) * 100), 1, numel(times)), 'b--');
-        plot(times, repmat((1/nClasses * 100 * 2), 1, numel(times)), 'b--');
-        hold off
-        
-        ylim([0 120])
-        xlim([times(1) times(end)]);
-        xlabel('Time')
-        ylabel('success rate %')
-        titleString = sprintf('Sucess rate, subject %d ', subjects(i));
-        title(titleString)
-        if  mod(i, numPlotsPerFigure) == 0 || i == nSubjects
-            if  mod(i, numPlotsPerFigure) == 0
-                firstSubIdx = i - numPlotsPerFigure +1;
-            else %i == nSubjects
-                firstSubIdx = i - mod(i, numPlotsPerFigure) +1
-            end
-            figureFileName = sprintf('%d-%d-%s-%s',subjects(firstSubIdx), subjects(i), C.conditionDesc, C.results_suffix);
-            figureFileName = strcat(C.figuresDir, 'latest\', figureFileName);
-            print(gcf, figureFileName, '-djpeg',  '-r0');
-        end
-    end
     toc(analysisTic)
-    end
+
 end

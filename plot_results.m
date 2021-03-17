@@ -1,10 +1,11 @@
 function plot_results(subjects)
-    C = Constants();
+    if nargin ==  0
+        C = Constants();
+    end
+
     subjects = C.subjects;
     nSubjects = C.nSubjects;
     conditions = C.conditions;
-%     conditions = ["cong_int", "cong_scr"]; %, "inc_int"];
-    % baseDir("G:\My Drive\MudrikLab020818\Experiments_new\Jonathan\erp-decoding\")
 
     for s = 1:nSubjects
         sub = subjects(s);
@@ -16,7 +17,7 @@ function plot_results(subjects)
                              C.data_suffix, ...
                              C.result_suffix, ...
                              '.mat');
-        load(resultsFile);% into "decoder"
+        load(resultsFile); % into "decoder"
         results{s} = decoder.successRatesTime;
     end
 
