@@ -4,6 +4,8 @@ bUseCustomElectrodes = 0;
 
 C = Constants();
 
+eeglab;
+
 % all parameter options - the whole parameter space
 % ---------------------
 filters = ["_filtered_6_Hz", "_filtered_30_Hz"];

@@ -76,7 +76,10 @@ classdef Constants
                 % -----------
 
                 obj.subjects = [11:12, 15:17, 19:27, 29, 30, 35:38, 41, 42];
+                obj.subjects = [11:12];
+
                 obj.origConditions = ["Cong_Int", "Inc_Int", "Cong_Scr", "Inc_Scr"];
+                
 
                 obj.origLabels =        [1, 2, 3, 4];
                 obj.origLabelTranslation =  [1, 1, 2, 2];
@@ -94,14 +97,14 @@ classdef Constants
                 % Paths
                 % -----------
                 obj.baseDir = "C:\Users\Jonathan\Google Drive\Msc neuroscience\lab\analysis_scripts\erp-decoding\";
-                obj.dataLocation = strcat(obj.baseDir, "experiment_data\exp_itai_unconscious\");
-                obj.outputDir = strcat(obj.baseDir, "output\");
+                obj.dataLocation = strcat(obj.baseDir, "experiment_data\test\");
+                obj.outputDir = strcat(obj.baseDir, "test_output\");
                 obj.resultsDir = strcat(obj.outputDir, 'mat-files\');
                 obj.figuresDir = strcat(obj.outputDir, 'figures\');
 
                 %                 obj.resultsDir = strcat(obj.outputDir, 'mat-files-temp\');
 
-                obj.eeglabPath = strcat(obj.baseDir, "software\eeglab2020_0");
+                obj.eeglabPath = strcat(obj.baseDir, "C:\Users\Jonathan\Google Drive\Msc neuroscience\lab\software\eeglab2020_0");
 
                 obj = setLabelProperties(obj);
 
@@ -143,7 +146,9 @@ classdef Constants
                 else
                     obj.uniqueLables = obj.labels; % # of different classes
                 end
-                    obj.nUniqueLables = numel(obj.uniqueLables); % # of different classes
+                obj.nUniqueLables = numel(obj.uniqueLables); % # of different classes
+           
+                addpath(obj.eeglabPath);
 
             end %setLabelProperties
 

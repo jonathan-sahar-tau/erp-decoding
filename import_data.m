@@ -23,6 +23,10 @@ function import_data(subjects)
             currentFilename= strcat(subjectName, '_', condition, C.initialDataSuffix, '.vhdr');
             exportFileName = strcat(subjectName, '_', condition, '.mat');
             exportLocation = strcat(exportDataLocation, '\', exportFileName);
+            
+            fprintf('\n\nimporting file:\t%s\n\n',currentFilename);
+
+            
             EEGData = (pop_loadbv(dataLocation, currentFilename, [], 1:numElectrodes));
             save(exportLocation, 'EEGData', '-v7.3')
         end
