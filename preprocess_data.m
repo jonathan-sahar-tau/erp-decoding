@@ -49,20 +49,32 @@ function preprocess_data(subjects)
         allLabels = cat(1, conditionLabels{:});
         
              
-        data.times = floor(EEG.(C.conditions(1)).times);
+        data.times = floor(EEG.(C.conditions(1)).times(1:size(allData, 3)));
         data.time.pre = data.times(1);
         data.time.post = data.times(end);
         
-        downsampledTimes = data.time.pre:C.resamplingRatio:data.time.post; % time points of interest in the analysis
+
+        % create a boolean array with length equal to the number of timepoints in
+        % the original data, where "1" at an index i denotes that timepoint i should
+        % be used for this analysis - this will be used for the downsampling itself
+        % then create an array of time points belonging to the current analysis
+        % - downsampled by a factor of 2
+        downsampleFactor = 2;
+
+        nOrigDataPoints = numel(data.times);
+        t1 = 1:nOrigDataPoints;
+        t2 = 1:downsampleFactor:nOrigDataPoints;
+        relevantPoints = ismember(t1, t2);
+        nTimes = length(relevantPoints);
+        downsampledTimes = data.times(relevantPoints);
+
         nTotalTrials = numel(allLabels);
 
-        tois = ismember(data.time.pre:2:data.time.post,downsampledTimes);
-        nTimes = length(tois);
         nElectrodes = numel(C.allElectrodesInOrder);
         filteredData = nan(nTotalTrials,nElectrodes,nTimes);
        if bApplyLowpassFilter == 1
             parfor electrodeIdx = 1:nElectrodes
-                    tmp = eegfilt(squeeze(allData(:,electrodeIdx,:)),C.Fs,C.lowpassFrequencies(1,1),C.lowpassFrequencies(1,2)); % low pass filter
+                    tmp = eegfilt(squeeze(allData(:,electrodeIdx,:)),C.origSamplingFreq,C.lowpassFrequencies(1,1),C.lowpassFrequencies(1,2)); % low pass filter
                     filteredData(:,electrodeIdx,:) = tmp(:,1:nTimes);
             end
             allData = filteredData;

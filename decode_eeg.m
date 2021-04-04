@@ -81,23 +81,19 @@ function decode_eeg(C)
         data.eeg = data.eeg(labelIdx, electrodeIdx, :);
         data.labels = data.labels(labelIdx);
 
-        % create an array of time points belonging to the current analysis
-        % - downsampled by a factor of 2
-        downsampleFactor = 2;
-        origSamplingInterval = fix(1000/C.origSamplingFreq);
-        resamplingInterval = origSamplingInterval * downsampleFactor;
-        downsampledTimes = data.time.pre:resamplingInterval:data.time.post;
-
         % create a boolean array with length equal to the number of timepoints in
         % the original data, where "1" at an index i denotes that timepoint i should
         % be used for this analysis - this will be used for the downsampling itself
-        nOrigDataPoints = fix((data.time.post - data.time.pre)/1000 * C.origSamplingFreq);
+        % then create an array of time points belonging to the current analysis
+        % - downsampled by a factor of 2
+        downsampleFactor = 2;
+        nOrigDataPoints = numel(data.times);
         t1 = 1:nOrigDataPoints;
-        t2 = 1:2:nOrigDataPoints
-        relevantTimes = ismember(t1, t2);
+        t2 = 1:downsampleFactor:nOrigDataPoints;
+        relevantPoints = ismember(t1, t2);
 
-        nSamps = length(downsampledTimes);
-        nTimes = length(relevantTimes);
+        relevantTimes = data.times(relevantPoints);
+        nSamps = length(relevantTimes);
         
         % overall # of trials (all conditions)
         nTrials = numel(data.labels);
@@ -107,7 +103,7 @@ function decode_eeg(C)
         iterTestLabels = nan(C.nIter,nSamps,C.nCVBlocks,nClasses);  % a matrix for saving true target values
         blocksAssign = nan(nTrials,C.nIter);  % a matrix for saving block assignments
 
-        filtData = data.eeg(:,:,1:nTimes);
+        downSampledData = data.eeg(:,:,relevantPoints);
 
         % bootstrapping iterations
         for iter = 1:C.nIter
@@ -155,7 +151,7 @@ function decode_eeg(C)
             blockCounter = 1;
             for class = 1:nClasses
                 for block = 1:C.nCVBlocks
-                    blockData(blockCounter,:,:) = squeeze(mean(filtData(data.labels==C.uniqueLables(class) & blocks == block,:,relevantTimes),1)); %downsample and average trials into blocks
+                    blockData(blockCounter,:,:) = squeeze(mean(downSampledData(data.labels==C.uniqueLables(class) & blocks == block,:,:),1)); %downsample and average trials into blocks
                     labels(blockCounter) = class;
                     blockNum(blockCounter) = block;
                     blockCounter = blockCounter+1;
@@ -198,7 +194,7 @@ function decode_eeg(C)
         decoder.data = data;
         decoder.data.electrodes = relevantElectrodes;
         decoder.data.nElectrodes = numel(relevantElectrodes);
-        decoder.downsampledTimes = downsampledTimes;
+        decoder.downsampledTimes = relevantTimes;
         decoder.nCVBlocks = C.nCVBlocks;
         decoder.targets = iterTestLabels;
         decoder.modelPredict = svm_predict;
