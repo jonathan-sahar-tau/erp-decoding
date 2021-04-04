@@ -22,6 +22,7 @@ classdef Constants
         dataLocation
         outputDir
         resultsDir
+        decoderOutputDir
         figuresDir
         eeglabPath
 
@@ -100,7 +101,9 @@ classdef Constants
                 obj.dataLocation = strcat(obj.baseDir, "experiment_data\test\");
                 obj.outputDir = strcat(obj.baseDir, "test_output\");
                 obj.resultsDir = strcat(obj.outputDir, 'mat-files\');
+                obj.decoderOutputDir = strcat(obj.resultsDir, 'decoder-params-output\');
                 obj.figuresDir = strcat(obj.outputDir, 'figures\');
+                
 
                 %                 obj.resultsDir = strcat(obj.outputDir, 'mat-files-temp\');
 
