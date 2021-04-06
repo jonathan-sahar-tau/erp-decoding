@@ -107,7 +107,7 @@ classdef Constants
 
                 %                 obj.resultsDir = strcat(obj.outputDir, 'mat-files-temp\');
 
-                obj.eeglabPath = strcat(obj.baseDir, "C:\Users\Jonathan\Google Drive\Msc neuroscience\lab\software\eeglab2020_0");
+                obj.eeglabPath = strcat("C:\Users\Jonathan\Google Drive\Msc neuroscience\lab\software\eeglab2020_0");
 
                 obj = setLabelProperties(obj);
 
